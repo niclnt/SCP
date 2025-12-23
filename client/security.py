@@ -10,6 +10,8 @@ FORBIDDEN_PROCESSES = [
 # Control para extensiones de vscode, se agregaran mas a futuro
 FORBIDDEN_EXTENSIONS = [
     "github.copilot",       # GitHub Copilot
+    "github.copilot-chat",  # Copilot Chat
+    "visualstudioexptteam.vscodeintellicode", # IntelliCode
     "blackboxapp",          # Blackbox AI
     "tabnine",              # Tabnine
     "codeium",              # Codeium
@@ -18,7 +20,29 @@ FORBIDDEN_EXTENSIONS = [
     "codium",               # Otra variante
     "supermaven"            # Otra IA rápida
 ]
+def find_vscode_executable():
+    """
+    Busca inteligentemente dónde está instalado VS Code (code.cmd) en Windows.
+    Retorna la ruta completa o None si no lo encuentra.
+    """
+    # Rutas estándar donde Windows suele instalar VS Code
+    possible_paths = [
+        # Instalación de Usuario (AppData) - La más común
+        os.path.expandvars(r'%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd'),
+        # Instalación de Sistema (Archivos de Programa)
+        os.path.expandvars(r'%PROGRAMFILES%\Microsoft VS Code\bin\code.cmd'),
+        # Instalación de Sistema (x86)
+        os.path.expandvars(r'%PROGRAMFILES(X86)%\Microsoft VS Code\bin\code.cmd'),
+        # Intento genérico en disco C
+        r"C:\VSCode\bin\code.cmd" 
+    ]
 
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+            
+    # Si no lo encontramos en las rutas, retornamos "code" para ver si por milagro está en el PATH
+    return "code"
 def get_running_violations():
     """Retorna una lista de procesos prohibidos detectados."""
     found = []
@@ -33,36 +57,43 @@ def get_running_violations():
 
 def get_vscode_violations():
     """
-    Ejecuta un comando oculto para listar extensiones instaladas.
-    Retorna una lista con las IAs encontradas.
+    Usa la ruta encontrada para listar extensiones.
     """
     violations = []
+    vscode_path = find_vscode_executable()
     
     try:
-        # Configuración para que NO salga una ventana negra (cmd) al ejecutar esto
         creation_flags = 0x08000000 if os.name == 'nt' else 0
         
-        # Ejecutamos 'code --list-extensions'
+        # Ejecutamos el comando usando la ruta detectada
         result = subprocess.run(
-            ["code", "--list-extensions"], 
+            [vscode_path, "--list-extensions"], 
             capture_output=True, 
             text=True, 
             creationflags=creation_flags
         )
         
-        # Convertimos la lista de extensiones instaladas a minúsculas
-        installed_extensions = result.stdout.lower()
+        if result.returncode != 0:
+            # Si el comando falló (ej: retorno código de error)
+            pass
         
-        # Buscamos si alguna prohibida está en la lista
+        installed = result.stdout.lower()
+        
+        # --- DEBUG TEMPORAL: Para que se vea en la consola qué encontró ---
+        if len(installed) > 0:
+            print(f"[DEBUG] VS Code encontrado en: {vscode_path}")
+            print(f"[DEBUG] Extensiones instaladas detectadas:\n{installed[:200]}...") # Muestra los primeros caracteres
+        # ----------------------
+        
         for banned in FORBIDDEN_EXTENSIONS:
-            if banned in installed_extensions:
-                # Encontramos una IA
+            if banned in installed:
+                print(f"[DEBUG] ¡Violación encontrada!: {banned}") # DEBUG
                 violations.append(f"Extensión IA: {banned}")
                 
     except FileNotFoundError:
-        # Esto pasa si VS Code no está instalado o no está en el PATH
-        pass
+        print(f"[ADVERTENCIA] No se pudo ejecutar VS Code desde: {vscode_path}")
     except Exception as e:
-        print(f"Error chequeando extensiones: {e}")
+        print(f"[ERROR] Falló el chequeo de extensiones: {e}")
 
     return violations
+   
