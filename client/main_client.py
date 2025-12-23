@@ -24,20 +24,34 @@ class NetworkThread(QThread):
         try:
             self.socket.connect((self.ip, self.port))
             
-            # 1. Enviar registro
+            # 1. Enviar registro INICIAL
             reg_data = json.dumps({"type": "REGISTER", "hostname": self.hostname})
             self.socket.send(reg_data.encode('utf-8'))
+
+            #contador de ciclos para optimizar el escaneo
+            loop_counter=0
             
             # 2. Iniciar bucle de seguridad y escucha
             while self.running:
                 # -- Verificación de Seguridad --
-                violations = security.get_running_violations()
+                violations=[]
+                #escaneo rapido cada 2 seg
+                proc_violations = security.get_running_violations()
+                violations.extend(proc_violations)
+
+                # 2. Escaneo Lento: Extensiones VS Code (Cada 20 seg aprox)
+                # Solo entramos aca si el contador llega a 10
+                if loop_counter >= 10:
+                    ext_violations = security.get_vscode_violations()
+                    violations.extend(ext_violations)
+                    loop_counter = 0 # Reseteamos contador
+                #si encontramos algo enviamos ALERTA
                 if violations:
                     alert = json.dumps({"type": "ALERT", "hostname": self.hostname, "violations": violations})
                     try:
                         self.socket.send(alert.encode('utf-8'))
                     except: pass
-                
+                loop_counter +=1
                 time.sleep(2) # Revisar cada 2 segundos
 
         except Exception as e:
