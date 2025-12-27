@@ -1,99 +1,146 @@
 import psutil
-import subprocess
 import os
+import json
+import re
+import time
+import subprocess
+import shutil
 
-# Lista de procesos prohibidos, se agregaran mas a futuro
+# --- 1. PROCESOS PROHIBIDOS ---
 FORBIDDEN_PROCESSES = [
     "chrome.exe", "firefox.exe", "msedge.exe", "opera.exe", 
-    "discord.exe", "whatsapp.exe", "chatgpt.exe", "telegram.exe"
+    "discord.exe", "chatgpt.exe", "cursor.exe"
 ]
-# Control para extensiones de vscode, se agregaran mas a futuro
-FORBIDDEN_EXTENSIONS = [
-    "github.copilot",       # GitHub Copilot
-    "github.copilot-chat",  # Copilot Chat
-    "visualstudioexptteam.vscodeintellicode", # IntelliCode
-    "blackboxapp",          # Blackbox AI
-    "tabnine",              # Tabnine
-    "codeium",              # Codeium
-    "mintlify",             # Generadores de doc
-    "genie",                # ChatGPT en VS Code
-    "codium",               # Otra variante
-    "supermaven"            # Otra IA rápida
-]
-def find_vscode_executable():
-    """
-    Busca inteligentemente dónde está instalado VS Code (code.cmd) en Windows.
-    Retorna la ruta completa o None si no lo encuentra.
-    """
-    # Rutas estándar donde Windows suele instalar VS Code
-    possible_paths = [
-        # Instalación de Usuario (AppData) - La más común
-        os.path.expandvars(r'%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd'),
-        # Instalación de Sistema (Archivos de Programa)
-        os.path.expandvars(r'%PROGRAMFILES%\Microsoft VS Code\bin\code.cmd'),
-        # Instalación de Sistema (x86)
-        os.path.expandvars(r'%PROGRAMFILES(X86)%\Microsoft VS Code\bin\code.cmd'),
-        # Intento genérico en disco C
-        r"C:\VSCode\bin\code.cmd" 
-    ]
 
-    for path in possible_paths:
-        if os.path.exists(path):
-            return path
-            
-    # Si no lo encontramos en las rutas, retornamos "code" para ver si por milagro está en el PATH
-    return "code"
+# --- 2. EXTENSIONES A SABOTEAR ---
+# Buscamos carpetas que contengan estas palabras
+EXTENSION_KEYWORDS = [
+    "github.copilot", 
+    "blackbox", 
+    "tabnine", 
+    "codeium", 
+    "continue"
+]
+
+# --- 3. RUTAS DE EXTENSIONES ---
+def get_extensions_paths():
+    paths = []
+    user_profile = os.environ.get('USERPROFILE')
+    
+    # 1. Carpeta estándar de usuario (.vscode/extensions)
+    paths.append(os.path.join(user_profile, '.vscode', 'extensions'))
+    
+    # 2. Carpeta de instalación global (A veces usada en labs)
+    paths.append(r"C:\Program Files\Microsoft VS Code\resources\app\extensions")
+    
+    return paths
+
+# --- 4. FUNCIONES DE FUERZA BRUTA ---
+
+def kill_vscode_processes():
+    """Mata VS Code sin piedad."""
+    print("[SEGURIDAD] Matando VS Code...")
+    killed = False
+    targets = ["Code.exe", "code.exe", "cursor.exe"]
+    for target in targets:
+        try:
+            # taskkill /F (Forzar) /IM (Imagen) /T (Árbol de procesos)
+            subprocess.run(f"taskkill /F /IM {target} /T", shell=True, capture_output=True)
+            killed = True
+        except: pass
+    return killed
+
+def sabotage_ai_extensions():
+    """
+    Busca las carpetas de IA y las renombra agregando '.BLOQUEADO'.
+    VS Code no podrá cargarlas al reiniciar.
+    Retorna True si bloqueó alguna extensión (requiere reinicio).
+    """
+    changes_made = False
+    extension_dirs = get_extensions_paths()
+
+    print("[SEGURIDAD] Buscando extensiones de IA para bloquear...")
+
+    for base_path in extension_dirs:
+        if not os.path.exists(base_path): continue
+
+        try:
+            # Listamos todas las carpetas de extensiones
+            folders = os.listdir(base_path)
+            for folder in folders:
+                folder_lower = folder.lower()
+                full_path = os.path.join(base_path, folder)
+
+                # Si ya está bloqueada, la ignoramos
+                if folder_lower.endswith(".bloqueado"):
+                    continue
+
+                # Verificamos si es una IA
+                is_ai = any(key in folder_lower for key in EXTENSION_KEYWORDS)
+                
+                if is_ai:
+                    new_path = full_path + ".BLOQUEADO"
+                    try:
+                        print(f"[BLOQUEO] Deshabilitando extensión: {folder}")
+                        os.rename(full_path, new_path)
+                        changes_made = True
+                    except PermissionError:
+                        print(f"[ERROR] No tengo permisos para bloquear: {folder}. Ejecuta como Admin.")
+                    except Exception as e:
+                        print(f"[ERROR] Falló bloqueo de {folder}: {e}")
+
+        except Exception as e:
+            print(f"[ERROR] Error escaneando {base_path}: {e}")
+
+    return changes_made
+
+def restore_ai_extensions():
+    """
+    (Opcional) Quita el '.BLOQUEADO' al terminar el examen.
+    """
+    extension_dirs = get_extensions_paths()
+    print("[LIMPIEZA] Restaurando extensiones...")
+    
+    for base_path in extension_dirs:
+        if not os.path.exists(base_path): continue
+        try:
+            folders = os.listdir(base_path)
+            for folder in folders:
+                if folder.endswith(".BLOQUEADO"):
+                    original_name = folder.replace(".BLOQUEADO", "")
+                    old_path = os.path.join(base_path, folder)
+                    new_path = os.path.join(base_path, original_name)
+                    try:
+                        os.rename(old_path, new_path)
+                        print(f"[RESTAURADO] {original_name}")
+                    except: pass
+        except: pass
+
+# --- MONITOREO ---
 def get_running_violations():
-    """Retorna una lista de procesos prohibidos detectados."""
+    # Detectar procesos prohibidos (Chrome, etc)
     found = []
     for proc in psutil.process_iter(['name']):
         try:
             if proc.info['name'] and proc.info['name'].lower() in FORBIDDEN_PROCESSES:
-                if proc.info['name'] not in found:
-                    found.append(proc.info['name'])
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
-    return found
+                found.append(proc.info['name'])
+        except: pass
+    return list(set(found))
 
-def get_vscode_violations():
-    """
-    Usa la ruta encontrada para listar extensiones.
-    """
+def check_settings_violations():
+    # En este enfoque físico, si la carpeta está renombrada, no necesitamos chequear settings.
+    # Pero podemos verificar si alguna carpeta se "desbloqueó" sola.
+    extension_dirs = get_extensions_paths()
     violations = []
-    vscode_path = find_vscode_executable()
     
-    try:
-        creation_flags = 0x08000000 if os.name == 'nt' else 0
+    for base_path in extension_dirs:
+        if not os.path.exists(base_path): continue
+        try:
+            folders = os.listdir(base_path)
+            for folder in folders:
+                # Si encontramos una carpeta de IA que NO tiene .BLOQUEADO al final, es trampa
+                if any(k in folder.lower() for k in EXTENSION_KEYWORDS) and not folder.endswith(".BLOQUEADO"):
+                    violations.append(f"IA Detectada Activa: {folder}")
+        except: pass
         
-        # Ejecutamos el comando usando la ruta detectada
-        result = subprocess.run(
-            [vscode_path, "--list-extensions"], 
-            capture_output=True, 
-            text=True, 
-            creationflags=creation_flags
-        )
-        
-        if result.returncode != 0:
-            # Si el comando falló (ej: retorno código de error)
-            pass
-        
-        installed = result.stdout.lower()
-        
-        # --- DEBUG TEMPORAL: Para que se vea en la consola qué encontró ---
-        if len(installed) > 0:
-            print(f"[DEBUG] VS Code encontrado en: {vscode_path}")
-            print(f"[DEBUG] Extensiones instaladas detectadas:\n{installed[:200]}...") # Muestra los primeros caracteres
-        # ----------------------
-        
-        for banned in FORBIDDEN_EXTENSIONS:
-            if banned in installed:
-                print(f"[DEBUG] ¡Violación encontrada!: {banned}") # DEBUG
-                violations.append(f"Extensión IA: {banned}")
-                
-    except FileNotFoundError:
-        print(f"[ADVERTENCIA] No se pudo ejecutar VS Code desde: {vscode_path}")
-    except Exception as e:
-        print(f"[ERROR] Falló el chequeo de extensiones: {e}")
-
     return violations
-   

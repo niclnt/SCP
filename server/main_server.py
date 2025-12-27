@@ -1,3 +1,4 @@
+import time
 import sys
 import socket
 import json
@@ -48,7 +49,7 @@ class TeacherDashboard(QMainWindow):
         self.setWindowTitle("SCP - Monitor Docente")
         self.resize(800, 500)
         self.setStyleSheet("background-color: #1e1e2e; color: white;")
-
+        self.alert_timers={}
         # Layout
         central = QWidget()
         self.setCentralWidget(central)
@@ -88,14 +89,30 @@ class TeacherDashboard(QMainWindow):
             self.table.setItem(found_row, 1, QTableWidgetItem(ip))
             self.table.setItem(found_row, 2, QTableWidgetItem(""))
 
-        status_item = QTableWidgetItem(status if "ALERT" not in status else status)
-        if "ALERT" in status:
-            status_item.setForeground(QColor("#ff5555")) # Rojo
-            status_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-        else:
-            status_item.setText("🟢 Conectado / Seguro")
-            status_item.setForeground(QColor("#50fa7b")) # Verde
+        current_time = time.time()
 
+        #status_item = QTableWidgetItem(status if "ALERT" not in status else status)
+        # Si llega una NUEVA alerta, actualizamos el temporizador
+        if "ALERT" in status:
+            self.alert_timers[hostname] = current_time
+            display_text = status
+            display_color = "#ff5555" # Rojo
+        else:
+            last_alert_time = self.alert_timers.get(hostname, 0)
+            if current_time - last_alert_time < 10: # 10 Segundos de persistencia
+                # Mantenemos la alerta anterior visible
+                old_item = self.table.item(found_row, 2)
+                display_text = old_item.text() if old_item else "🔴 ALERTA RECIENTE"
+                display_color = "#ff5555" # Rojo
+            else:
+                # Ya pasó el tiempo, volvemos a verde
+                display_text = "🟢 Conectado / Seguro"
+                display_color = "#50fa7b" # Verde
+
+        # 3. Pintar la celda
+        status_item = QTableWidgetItem(display_text)
+        status_item.setForeground(QColor(display_color))
+        status_item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         self.table.setItem(found_row, 2, status_item)
 
 if __name__ == "__main__":
