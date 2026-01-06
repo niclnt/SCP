@@ -1,0 +1,23 @@
+# --- Archivos de Compilación de Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Entornos Virtuales ---
+venv/
+env/
+.env
+
+# --- PyInstaller (Basura de compilación) ---
+build/
+dist/
+*.spec
+
+# --- Carpetas de Salida (Tus EXE finales) ---
+Release/
+
+# --- Archivos Ejecutables (No se suben al repo) ---
+*.exe
+
+# --- Excepciones (Si quieres subir alguna herramienta especifica, usa !) ---
+# Por ejemplo, si quisieras subir una herramienta: !tools/tool.exe

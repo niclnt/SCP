@@ -16,6 +16,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
+LicenseFile=LICENSE.txt
 ; Donde se instalara por defecto (Archivos de Programa\SCP)
 DefaultDirName={autopf}\{#MyAppName}
 ; Nombre del grupo en el Menu Inicio
@@ -46,24 +47,23 @@ Name: "alumno"; Description: "Cliente para Alumnos (Examen)"; Types: full custom
 Name: "profesor"; Description: "Servidor para Profesores (Monitor)"; Types: full custom
 
 [Files]
-; Archivos del ALUMNO (Solo se copian si se elige el componente 'alumno')
+; AHORA INCLUIMOS EL LAUNCHER
+Source: "Release\SCP_Launcher.exe"; DestDir: "{app}"; Components: alumno; Flags: ignoreversion
 Source: "Release\SCP_Alumno.exe"; DestDir: "{app}"; Components: alumno; Flags: ignoreversion
-; Archivos del PROFESOR (Solo se copian si se elige el componente 'profesor')
 Source: "Release\SCP_Profesor.exe"; DestDir: "{app}"; Components: profesor; Flags: ignoreversion
-; El icono tambien se copia
 Source: "scp.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-; Accesos directos en el Menu Inicio
-Name: "{group}\SCP Alumno"; Filename: "{app}\SCP_Alumno.exe"; IconFilename: "{app}\scp.ico"; Components: alumno
+; EL ACCESO DIRECTO DEL ALUMNO AHORA APUNTA AL LAUNCHER
+Name: "{group}\SCP Alumno"; Filename: "{app}\SCP_Launcher.exe"; IconFilename: "{app}\scp.ico"; Components: alumno
 Name: "{group}\SCP Profesor"; Filename: "{app}\SCP_Profesor.exe"; IconFilename: "{app}\scp.ico"; Components: profesor
 Name: "{group}\Desinstalar SCP"; Filename: "{uninstallexe}"
 
-; Accesos directos en el Escritorio (Solo si el usuario marco la casilla)
-Name: "{autodesktop}\SCP Alumno"; Filename: "{app}\SCP_Alumno.exe"; IconFilename: "{app}\scp.ico"; Tasks: desktopicon; Components: alumno
+; LO MISMO EN EL ESCRITORIO
+Name: "{autodesktop}\SCP Alumno"; Filename: "{app}\SCP_Launcher.exe"; IconFilename: "{app}\scp.ico"; Tasks: desktopicon; Components: alumno
 Name: "{autodesktop}\SCP Profesor Monitor"; Filename: "{app}\SCP_Profesor.exe"; IconFilename: "{app}\scp.ico"; Tasks: desktopicon; Components: profesor
 
 [Run]
-; Opcion para ejecutar al finalizar la instalacion
-Filename: "{app}\SCP_Alumno.exe"; Description: "Iniciar SCP Alumno ahora"; Flags: nowait postinstall skipifsilent; Components: alumno
+; AL TERMINAR LA INSTALACION, EJECUTAMOS EL LAUNCHER
+Filename: "{app}\SCP_Launcher.exe"; Description: "Iniciar SCP Alumno ahora"; Flags: nowait postinstall skipifsilent; Components: alumno
 Filename: "{app}\SCP_Profesor.exe"; Description: "Iniciar Monitor Profesor ahora"; Flags: nowait postinstall skipifsilent unchecked; Components: profesor
