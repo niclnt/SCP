@@ -20,4 +20,4 @@ EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO. EL AUTOR N
 5. TERMINACIÓN
 Esta licencia es efectiva hasta que sea terminada. Sus derechos bajo esta licencia terminarán automáticamente sin previo aviso si usted incumple cualquiera de sus términos.
 
-Copyright (c) 2024 Nicolas Bustos. Todos los derechos reservados.
+Copyright (c) 2026 Nicolas Bustos. Todos los derechos reservados.
