@@ -1,5 +1,5 @@
 {
-    "version": "1.0",
-    "changelog": "Lanzamiento inicial Alpha.",
-    "installer_url": "https://github.com/niclnt/SCP/releases/download/v1.0.0-alpha/Instalar_SCP_v1.0.exe"
+    "version": "1.0.1",
+    "changelog": "Agregado contrato de licencia EULA.",
+    "installer_url": "https://github.com/niclnt/SCP/releases/download/v1.0.1/Instalar_SCP_v1.0.1.exe"
 }

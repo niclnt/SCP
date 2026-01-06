@@ -3,7 +3,7 @@ ACUERDO DE LICENCIA DE USUARIO FINAL (EULA) PARA SCP - EXAMGUARD
 IMPORTANTE: LEA DETENIDAMENTE. AL INSTALAR ESTE SOFTWARE, USTED ACEPTA ESTOS TÉRMINOS.
 
 1. CONCESIÓN DE LICENCIA
-Nicolas [Tu Apellido] ("El Autor") le concede una licencia personal, no exclusiva e intransferible para instalar y utilizar el software SCP ("El Software") únicamente con fines educativos y de monitoreo académico.
+Nicolas Bustos le concede una licencia personal, no exclusiva e intransferible para instalar y utilizar el software SCP ("El Software") únicamente con fines educativos y de monitoreo académico.
 
 2. PROPIEDAD INTELECTUAL
 El Software es propiedad intelectual de El Autor y está protegido por las leyes de derechos de autor. Usted no adquiere la propiedad del Software, solo el derecho a usarlo.

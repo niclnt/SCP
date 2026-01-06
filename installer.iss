@@ -1,9 +1,9 @@
-; GUION DE INSTALACION PARA SCP (SISTEMA DE CONTROL DE EXAMEN)
+; GUIA DE INSTALACION PARA SCP (SISTEMA DE CONTROL DE EXAMEN)
 ; Autor: LNT
-; Version: 1.0 Alpha
+; Version: 1.0.1 Alpha
 
 #define MyAppName "SCP - ExamGuard"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Nicolas Bustos"
 #define MyAppURL "https://github.com/niclnt/SCP" ;aca proximamente el link de la web
 #define MyAppExeName "SCP_Alumno.exe" 
@@ -24,7 +24,7 @@ DefaultGroupName={#MyAppName}
 ; Carpeta donde aparecera el instalador final (junto a los otros exe)
 OutputDir=Release
 ; Nombre del archivo instalador
-OutputBaseFilename=Instalar_SCP_v1.0
+OutputBaseFilename=Instalar_SCP_v1.0.1
 ; Icono del instalador
 SetupIconFile=scp.ico
 ; Compresion maxima para que pese poco
