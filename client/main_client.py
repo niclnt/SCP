@@ -1,260 +1,322 @@
 import sys
 import socket
+import threading
 import json
 import time
-import threading
-# Importamos QFrame para hacer líneas separadoras
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QLabel, QLineEdit, QPushButton, QComboBox, QFrame) 
-from PyQt6.QtCore import pyqtSignal, QThread, Qt, QObject
-from PyQt6.QtGui import QFont, QColor
+import os
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                             QLineEdit, QPushButton, QComboBox, QMessageBox, QFrame)
+from PyQt6.QtCore import pyqtSignal, QThread, Qt
+from PyQt6.QtGui import QFont, QIcon
 
-import security
+# Importamos la guardia dinámica
+from security import guard
 
-# --- HILO DE ESCUCHA (Discovery - Igual que antes) ---
+# --- 1. DEFINICIÓN DE TEMAS (CLIENTE) ---
+
+THEME_DARK = """
+QWidget { background-color: #1e1e2e; font-family: 'Segoe UI', sans-serif; color: #cdd6f4; }
+QLineEdit { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; font-size: 14px; }
+QLineEdit:focus { border: 1px solid #89b4fa; }
+QComboBox { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; font-size: 14px; }
+QComboBox::drop-down { border: none; }
+QPushButton { background-color: #89b4fa; color: #1e1e2e; border-radius: 8px; padding: 12px; font-weight: bold; font-size: 14px; }
+QPushButton:hover { background-color: #b4befe; }
+QPushButton#Locked { background-color: #f38ba8; color: #181825; }
+QPushButton#Config { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 8px; }
+QPushButton#Config:hover { background-color: #45475a; }
+QLabel { font-size: 14px; }
+QLabel#Title { font-size: 22px; font-weight: bold; color: #fab387; }
+QLabel#Status { font-weight: bold; font-size: 16px; }
+QFrame { background-color: #181825; border-radius: 12px; }
+"""
+
+THEME_LIGHT = """
+QWidget { background-color: #eff1f5; font-family: 'Segoe UI', sans-serif; color: #4c4f69; }
+QLineEdit { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; font-size: 14px; }
+QLineEdit:focus { border: 1px solid #1e66f5; }
+QComboBox { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; font-size: 14px; }
+QComboBox::drop-down { border: none; }
+QPushButton { background-color: #1e66f5; color: #ffffff; border-radius: 8px; padding: 12px; font-weight: bold; font-size: 14px; }
+QPushButton:hover { background-color: #7287fd; }
+QPushButton#Locked { background-color: #d20f39; color: #ffffff; }
+QPushButton#Config { background-color: #e6e9ef; color: #4c4f69; border: 1px solid #dce0e8; padding: 8px; }
+QPushButton#Config:hover { background-color: #dce0e8; }
+QLabel { font-size: 14px; }
+QLabel#Title { font-size: 22px; font-weight: bold; color: #fe640b; }
+QLabel#Status { font-weight: bold; font-size: 16px; }
+QFrame { background-color: #e6e9ef; border-radius: 12px; border: 1px solid #dce0e8; }
+"""
+
+# --- 2. LOGICA DE RED (Igual que antes, con la corrección de seguridad) ---
+
 class DiscoveryThread(QThread):
-    server_found = pyqtSignal(str, str)
+    server_found = pyqtSignal(str, str) # Nombre, IP
 
     def run(self):
-        udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            udp_sock.bind(('', 5555))
-            while True:
-                data, addr = udp_sock.recvfrom(1024)
-                try:
-                    msg = json.loads(data.decode('utf-8'))
-                    if msg.get('type') == 'SCP_SERVER':
-                        # AQUÍ ESTÁ EL CAMBIO:
-                        # Leemos la IP que viene DENTRO del mensaje ("ip")
-                        # Si no viene, usamos la de addr[0] como respaldo.
-                        server_ip = msg.get('ip', addr[0])
-                        
-                        self.server_found.emit(msg['name'], server_ip)
-                except: pass
-        except: pass
-
-# --- HILO DE RED (Igual que antes) ---
-class NetworkThread(QThread):
-    msg_received = pyqtSignal(str)
-    status_update = pyqtSignal(str, str)
-
-    def __init__(self, ip, port, hostname):
-        super().__init__()
-        self.ip = ip
-        self.port = port
-        self.hostname = hostname
-        self.socket = None
-        self.running = True
-
-    def run(self):
-        # 1. SANITIZACIÓN
-        self.status_update.emit("SANITIZANDO VS CODE...", "#ffb86c")
-        security.kill_vscode_processes()
-        time.sleep(1)
-        security.sabotage_ai_extensions()
+            sock.bind(('', 5555))
+        except:
+            return 
         
-        # 2. CONEXIÓN
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.settimeout(5)
-        try:
-            self.status_update.emit(f"Conectando a {self.ip}...", "#f1fa8c")
-            self.socket.connect((self.ip, self.port))
-            self.socket.settimeout(None)
+        while True:
+            try:
+                data, addr = sock.recvfrom(1024)
+                msg = json.loads(data.decode('utf-8'))
+                if msg.get('type') == 'SCP_SERVER':
+                    self.server_found.emit(msg['name'], msg['ip'])
+            except: pass
 
-            reg_data = json.dumps({"type": "REGISTER", "hostname": self.hostname})
-            self.socket.send(reg_data.encode('utf-8'))
+class NetworkThread(QThread):
+    status_signal = pyqtSignal(str) # Para mostrar mensajes en la UI
+
+    def __init__(self, server_ip, student_name):
+        super().__init__()
+        self.server_ip = server_ip
+        self.student_name = student_name
+        self.running = True
+        self.sock = None
+
+    def run(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.sock.connect((self.server_ip, 9999))
             
-            self.status_update.emit("🔒 EXAMEN SEGURO", "#50fa7b")
+            listener = threading.Thread(target=self.receive_loop)
+            listener.daemon = True
+            listener.start()
+
+            reg_msg = json.dumps({"type": "REGISTER", "hostname": self.student_name})
+            self.sock.sendall(reg_msg.encode('utf-8'))
 
             while self.running:
-                violations = []
-                
-                # A. Defensa Activa
-                if security.sabotage_ai_extensions():
-                    security.kill_vscode_processes()
-                    violations.append("Intento Reactivación IA")
+                # 1. IA: Solo matamos VS Code si ACABAMOS de bloquear algo
+                if guard.sabotage_ai_extensions():
+                    print("[CLIENTE] IA detectada y bloqueada. Reiniciando VS Code...")
+                    guard.kill_vscode_processes()
 
-                # B. Escaneos
-                violations.extend(security.get_running_violations())
-                violations.extend(security.check_settings_violations())
-                
-                if violations:
-                    # CASO 1: HAY PROBLEMAS
-                    self.status_update.emit("¡ALERTA! TRAMPA DETECTADA", "#ff5555")
-                    try:
-                        alert = json.dumps({
-                            "type": "ALERT", 
-                            "hostname": self.hostname, 
-                            "violations": violations
-                        })
-                        self.socket.send(alert.encode('utf-8'))
-                    except: pass
+                # 2. Procesos Prohibidos
+                process_violations = guard.get_running_violations()
+                if process_violations:
+                    for proc in process_violations:
+                        guard.kill_specific_process(proc)
+
+                # 3. Reportar al Profesor
+                folder_violations = guard.check_settings_violations()
+                all_violations = folder_violations + process_violations
+
+                if all_violations:
+                    msg = json.dumps({"type": "ALERT", "violations": all_violations})
+                    self.status_signal.emit(f"⚠️ BLOQUEADO: {all_violations[0]}")
                 else:
-                    # CASO 2: TODO LIMPIO (Aquí estaba el silencio, ahora hablamos)
-                    self.status_update.emit("🔒 EXAMEN SEGURO", "#50fa7b")
-                    try:
-                        # Enviamos latido de "Todo OK"
-                        ok_msg = json.dumps({
-                            "type": "STATUS",
-                            "hostname": self.hostname,
-                            "status": "CLEAN" # Código interno para decir "Limpio"
-                        })
-                        self.socket.send(ok_msg.encode('utf-8'))
-                    except: pass
+                    msg = json.dumps({"type": "STATUS", "status": "CLEAN"})
+                    self.status_signal.emit("✅ Examen Seguro - Monitoreando")
+
+                try:
+                    self.sock.sendall(msg.encode('utf-8'))
+                except:
+                    break 
 
                 time.sleep(2)
 
         except Exception as e:
-            self.msg_received.emit(f"Error: {e}")
+            self.status_signal.emit(f"Error de conexión: {e}")
         finally:
-            if self.socket: self.socket.close()
+            self.running = False
+            if self.sock: self.sock.close()
 
-# --- INTERFAZ RENOVADA Y CORREGIDA ---
-class LoginWindow(QMainWindow):
+    def receive_loop(self):
+        try:
+            while self.running:
+                data = self.sock.recv(4096)
+                if not data: break
+                msg = json.loads(data.decode('utf-8'))
+                
+                if msg.get('type') == 'CONFIG':
+                    allowed = msg.get('allowed_apps', [])
+                    guard.update_config(allowed)
+                    print(f"[CLIENTE] Nuevas reglas recibidas: {allowed}")     
+        except: pass
+
+# --- 3. INTERFAZ GRÁFICA (Con Botón de Configuración) ---
+
+class StudentClient(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SCP - Acceso Alumno")
-        self.resize(400, 450) # Un poco más grande para que entre todo cómodo
-        self.setStyleSheet("background-color: #2e2e2e; color: white; font-family: Segoe UI;")
+        self.setWindowTitle("SCP - Examen Seguro")
+        self.resize(400, 550)
         
-        widget = QWidget()
-        self.setCentralWidget(widget)
-        layout = QVBoxLayout()
-        layout.setSpacing(10)
-        widget.setLayout(layout)
-
-        # Título
-        title = QLabel("Sistema de Control de Examen")
-        title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
-        layout.addSpacing(10)
-
-        # 1. Sección Nombre
-        layout.addWidget(QLabel("Paso 1: Tu Nombre o Legajo"))
-        self.input_name = QLineEdit(socket.gethostname())
-        self.input_name.setStyleSheet("padding: 10px; color: black; background: #ddd; border-radius: 4px; font-size: 14px;")
-        layout.addWidget(self.input_name)
-        layout.addSpacing(10)
-
-        # Separador
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #555;")
-        layout.addWidget(line)
-        layout.addSpacing(10)
-
-        # 2. Sección Selección de Servidor
-        layout.addWidget(QLabel("Paso 2: Selecciona la Clase (Automático)"))
-        self.combo_server = QComboBox()
-        self.combo_server.setStyleSheet("""
-            QComboBox { padding: 10px; color: black; background: #ddd; border-radius: 4px; font-size: 14px;}
-            QComboBox::drop-down { border: 0px; }
-        """)
-        self.combo_server.addItem("Buscando profesores en la red...", "")
-        layout.addWidget(self.combo_server)
-        layout.addSpacing(5)
+        # Estado inicial del tema
+        self.is_dark_mode = True 
         
-        # Label "O"
-        lbl_or = QLabel("- O -")
-        lbl_or.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_or.setStyleSheet("color: #aaa;")
-        layout.addWidget(lbl_or)
-        layout.addSpacing(5)
+        # Layout Principal
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(25, 25, 25, 25)
+        self.layout.setSpacing(15)
+        self.setLayout(self.layout)
 
-        # 3. Sección IP Manual
-        layout.addWidget(QLabel("Ingresa IP Manualmente (Si no aparece arriba)"))
-        self.input_ip_manual = QLineEdit()
-        self.input_ip_manual.setPlaceholderText("Ej: 192.168.1.55")
-        self.input_ip_manual.setStyleSheet("padding: 10px; color: black; background: #ddd; border-radius: 4px; font-size: 14px;")
-        layout.addWidget(self.input_ip_manual)
-        layout.addSpacing(20)
+        # --- BARRA SUPERIOR (TOP BAR) ---
+        # Aquí ponemos el botón de configuración a la derecha
+        top_bar = QHBoxLayout()
+        
+        # Titulo pequeño o vacío (El titulo grande va abajo)
+        top_bar.addStretch() # Empuja el botón a la derecha
+        
+        self.btn_theme = QPushButton("⚙️ Tema Oscuro")
+        self.btn_theme.setObjectName("Config") # Usamos el ID para darle estilo especial
+        self.btn_theme.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_theme.clicked.connect(self.toggle_theme)
+        self.btn_theme.setFixedWidth(150)
+        top_bar.addWidget(self.btn_theme)
+        
+        self.layout.addLayout(top_bar)
 
-        # --- BOTÓN CONECTAR (El que faltaba) ---
-        self.btn_connect = QPushButton("CONECTAR AL EXAMEN")
-        self.btn_connect.setFixedHeight(50)
-        self.btn_connect.setStyleSheet("""
-            QPushButton { background-color: #007acc; border-radius: 5px; font-weight: bold; font-size: 16px; }
-            QPushButton:hover { background-color: #0098ff; }
-        """)
-        # Conectamos el botón a la nueva lógica inteligente
-        self.btn_connect.clicked.connect(self.start_exam_smart)
-        layout.addWidget(self.btn_connect)
+        # --- ENCABEZADO ---
+        lbl_title = QLabel("SCP ExamGuard")
+        lbl_title.setObjectName("Title")
+        lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(lbl_title)
+        
+        lbl_subtitle = QLabel("Sistema de Control de Procesos")
+        lbl_subtitle.setStyleSheet("color: #bac2de; font-size: 12px;") # Se sobreescribe con el tema
+        self.lbl_subtitle = lbl_subtitle # Guardamos referencia para cambiarle color
+        lbl_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(lbl_subtitle)
+        
+        self.layout.addSpacing(10)
 
-        # Estado
-        self.status_label = QLabel("Completa los pasos para conectar.")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("color: #aaa; margin-top: 10px;")
-        layout.addWidget(self.status_label)
-        layout.addStretch()
+        # --- PANEL DE CONEXIÓN ---
+        self.frame_login = QFrame()
+        layout_login = QVBoxLayout()
+        layout_login.setContentsMargins(20, 25, 20, 25)
+        layout_login.setSpacing(15)
+        self.frame_login.setLayout(layout_login)
+        
+        self.input_name = QLineEdit()
+        self.input_name.setPlaceholderText("Nombre del Alumno (Apellido Nombre)")
+        layout_login.addWidget(self.input_name)
 
-        # Iniciar Discovery
+        lbl_class = QLabel("Seleccionar Clase:")
+        layout_login.addWidget(lbl_class)
+        
+        self.combo_servers = QComboBox()
+        self.combo_servers.addItem("Buscando profesores...")
+        layout_login.addWidget(self.combo_servers)
+        
+        layout_login.addSpacing(10)
+
+        self.btn_connect = QPushButton("Ingresar al Examen")
+        self.btn_connect.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_connect.clicked.connect(self.start_exam)
+        layout_login.addWidget(self.btn_connect)
+        
+        self.layout.addWidget(self.frame_login)
+
+        # --- PANEL DE ESTADO ---
+        self.lbl_status = QLabel("Esperando conexión...")
+        self.lbl_status.setObjectName("Status")
+        self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # El color inicial se pone en apply_theme
+        self.layout.addWidget(self.lbl_status)
+        
+        self.layout.addStretch()
+
+        # Iniciar Servicios
         self.discovery = DiscoveryThread()
-        self.discovery.server_found.connect(self.add_server_to_list)
+        self.discovery.server_found.connect(self.add_server)
         self.discovery.start()
-        self.known_servers = []
-
-    def add_server_to_list(self, name, ip):
-        if ip not in self.known_servers:
-            if not self.known_servers: self.combo_server.clear()
-            self.known_servers.append(ip)
-            self.combo_server.addItem(f"🏫 {name} ({ip})", ip)
-
-    # --- NUEVA LÓGICA DE CONEXIÓN INTELIGENTE ---
-    def start_exam_smart(self):
-        hostname = self.input_name.text().strip()
-        if not hostname:
-             self.status_label.setText("❌ Falta tu Nombre en el Paso 1")
-             self.status_label.setStyleSheet("color: #ff5555;")
-             return
-
-        target_ip = ""
         
-        # Lógica: ¿Escribió una IP manual? Usamos esa.
-        if self.input_ip_manual.text().strip():
-            target_ip = self.input_ip_manual.text().strip()
-            print(f"[DEBUG] Usando IP Manual: {target_ip}")
+        self.detected_ips = {}
+        self.net_thread = None
+
+        # Aplicar tema inicial
+        self.apply_theme()
+
+    def toggle_theme(self):
+        self.is_dark_mode = not self.is_dark_mode
+        self.apply_theme()
+
+    def apply_theme(self):
+        if self.is_dark_mode:
+            self.setStyleSheet(THEME_DARK)
+            self.btn_theme.setText("🌙 Modo Noche")
+            self.lbl_subtitle.setStyleSheet("color: #bac2de; font-size: 12px;")
+            # Ajustar color de status por defecto si no hay mensaje
+            if "Esperando" in self.lbl_status.text():
+                self.lbl_status.setStyleSheet("color: #6c7086;")
+        else:
+            self.setStyleSheet(THEME_LIGHT)
+            self.btn_theme.setText("☀️ Modo Día")
+            self.lbl_subtitle.setStyleSheet("color: #9ca0b0; font-size: 12px;")
+            if "Esperando" in self.lbl_status.text():
+                self.lbl_status.setStyleSheet("color: #9ca0b0;")
+        
+        # Re-aplicar estilos específicos de estado si ya hay un mensaje activo
+        self.update_status_label(self.lbl_status.text())
+
+    def add_server(self, name, ip):
+        if ip not in self.detected_ips:
+            if self.combo_servers.count() == 1 and self.combo_servers.itemText(0) == "Buscando profesores...":
+                self.combo_servers.clear()
             
-        # Si no, ¿seleccionó algo válido del combo? Usamos eso.
-        elif self.combo_server.currentData():
-            target_ip = self.combo_server.currentData()
-            print(f"[DEBUG] Usando IP Automática: {target_ip}")
-            
-        # Si no hay ninguna de las dos...
-        if not target_ip:
-            self.status_label.setText("❌ Selecciona un servidor o ingresa IP")
-            self.status_label.setStyleSheet("color: #ff5555;")
+            self.detected_ips[ip] = name
+            self.combo_servers.addItem(f"{name} ({ip})", ip)
+
+    def start_exam(self):
+        name = self.input_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Error", "Por favor ingresa tu nombre.")
             return
         
-        # ¡Todo listo, iniciamos!
-        self.start_connection_thread(target_ip, hostname)
+        idx = self.combo_servers.currentIndex()
+        if idx < 0: return
+        server_ip = self.combo_servers.itemData(idx)
+        if not server_ip: return
 
-    def start_connection_thread(self, ip, hostname):
-        self.btn_connect.setEnabled(False)
-        self.btn_connect.setText("INICIANDO...")
-        if self.discovery.isRunning(): self.discovery.terminate()
+        self.input_name.setDisabled(True)
+        self.combo_servers.setDisabled(True)
+        self.btn_connect.setText("🔒 EXAMEN EN CURSO")
+        self.btn_connect.setObjectName("Locked")
+        self.btn_connect.setDisabled(True)
+        
+        # Truco para forzar la actualización del estilo (por el cambio de ID)
+        self.style().unpolish(self.btn_connect)
+        self.style().polish(self.btn_connect)
 
-        self.network_thread = NetworkThread(ip, 9999, hostname)
-        self.network_thread.msg_received.connect(self.show_error)
-        self.network_thread.status_update.connect(self.update_status_ui)
-        self.network_thread.start()
+        self.net_thread = NetworkThread(server_ip, name)
+        self.net_thread.status_signal.connect(self.update_status_label)
+        self.net_thread.start()
 
-    def update_status_ui(self, text, color_hex):
-        self.btn_connect.setText(text)
-        self.btn_connect.setStyleSheet(f"background-color: {color_hex}; color: black; font-weight: bold; border-radius: 5px; font-size: 16px;")
-        self.status_label.setText(text)
-        self.status_label.setStyleSheet(f"color: {color_hex};")
+    def update_status_label(self, text):
+        self.lbl_status.setText(text)
+        
+        # Definimos colores según el tema
+        if self.is_dark_mode:
+            c_block = "#f38ba8" # Rojo pastel
+            c_safe = "#a6e3a1"  # Verde pastel
+            c_wait = "#6c7086"  # Gris
+        else:
+            c_block = "#d20f39" # Rojo fuerte
+            c_safe = "#40a02b"  # Verde fuerte
+            c_wait = "#9ca0b0"  # Gris
 
-    def show_error(self, msg):
-        self.status_label.setText(msg)
-        self.status_label.setStyleSheet("color: #ff5555;")
-        self.btn_connect.setEnabled(True)
-        self.btn_connect.setText("CONECTAR AL EXAMEN")
-        self.btn_connect.setStyleSheet("background-color: #007acc; border-radius: 5px; font-weight: bold; font-size: 16px;")
+        if "BLOQUEADO" in text:
+            self.lbl_status.setStyleSheet(f"color: {c_block}; font-weight: bold; font-size: 16px;")
+        elif "Seguro" in text:
+            self.lbl_status.setStyleSheet(f"color: {c_safe}; font-weight: bold; font-size: 16px;")
+        else:
+            self.lbl_status.setStyleSheet(f"color: {c_wait};")
+
+    def closeEvent(self, event):
+        if self.net_thread:
+            self.net_thread.running = False
+            self.net_thread.wait()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = LoginWindow()
+    window = StudentClient()
     window.show()
     sys.exit(app.exec())
