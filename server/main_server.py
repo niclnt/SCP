@@ -5,12 +5,11 @@ import json
 import time
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
-                             QPushButton, QCheckBox, QFrame)
+                             QPushButton, QCheckBox, QFrame, QMessageBox, QAbstractItemView)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
-# --- 1. DEFINICIÓN DE TEMAS (SERVER) ---
-
+# --- 1. DEFINICIÓN DE TEMAS ---
 THEME_DARK = """
 QMainWindow { background-color: #1e1e2e; }
 QWidget { font-family: 'Segoe UI', sans-serif; font-size: 14px; color: #cdd6f4; }
@@ -19,9 +18,11 @@ QTableWidget { background-color: #181825; border: 1px solid #313244; gridline-co
 QHeaderView::section { background-color: #11111b; padding: 10px; border: none; font-weight: bold; color: #89b4fa; font-size: 15px; }
 QPushButton { background-color: #89b4fa; color: #1e1e2e; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #b4befe; }
-/* Estilo especial para el botón de Configuración */
 QPushButton#Config { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 8px; }
 QPushButton#Config:hover { background-color: #45475a; }
+/* Estilo para el botón secundario (Aplicar a uno solo) */
+QPushButton#SingleUser { background-color: #fab387; color: #1e1e2e; }
+QPushButton#SingleUser:hover { background-color: #f9e2af; }
 QCheckBox { spacing: 8px; color: #cdd6f4; }
 QCheckBox::indicator { width: 20px; height: 20px; border-radius: 6px; border: 1px solid #585b70; }
 QCheckBox::indicator:checked { background-color: #a6e3a1; border: 1px solid #a6e3a1; }
@@ -37,9 +38,11 @@ QTableWidget { background-color: #ffffff; border: 1px solid #ccd0da; gridline-co
 QHeaderView::section { background-color: #dce0e8; padding: 10px; border: none; font-weight: bold; color: #1e66f5; font-size: 15px; }
 QPushButton { background-color: #1e66f5; color: #ffffff; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #7287fd; }
-/* Estilo especial para el botón de Configuración */
 QPushButton#Config { background-color: #e6e9ef; color: #4c4f69; border: 1px solid #dce0e8; padding: 8px; }
 QPushButton#Config:hover { background-color: #dce0e8; }
+/* Estilo para el botón secundario */
+QPushButton#SingleUser { background-color: #fe640b; color: #ffffff; }
+QPushButton#SingleUser:hover { background-color: #ff9d6e; }
 QCheckBox { spacing: 8px; color: #4c4f69; }
 QCheckBox::indicator { width: 20px; height: 20px; border-radius: 6px; border: 1px solid #9ca0b0; background-color: white; }
 QCheckBox::indicator:checked { background-color: #40a02b; border: 1px solid #40a02b; }
@@ -89,7 +92,10 @@ class ServerThread(threading.Thread):
         self.update_callback = callback
         self.server_socket = None
         self.running = True
-        self.clients = [] 
+        
+        # CAMBIO IMPORTANTE: Ahora es un diccionario { "NombreAlumno": Socket }
+        # Esto nos permite buscar el socket de alguien específico.
+        self.clients_map = {} 
 
     def run(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -101,24 +107,38 @@ class ServerThread(threading.Thread):
         while self.running:
             try:
                 client_sock, addr = self.server_socket.accept()
-                self.clients.append(client_sock)
                 threading.Thread(target=self.handle_client, args=(client_sock, addr)).start()
             except: break
 
     def broadcast_config(self, allowed_list):
-        msg = json.dumps({
-            "type": "CONFIG",
-            "allowed_apps": allowed_list
-        })
-        print(f"[SERVIDOR] Enviando reglas a {len(self.clients)} alumnos...")
+        """Envía reglas a TODOS"""
+        msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
+        print(f"[SERVIDOR] Broadcast rules: {allowed_list}")
         
-        active_clients = []
-        for sock in self.clients:
+        # Iteramos sobre los valores (los sockets) del diccionario
+        dead_clients = []
+        for hostname, sock in self.clients_map.items():
             try:
                 sock.sendall(msg.encode('utf-8'))
-                active_clients.append(sock)
-            except: pass
-        self.clients = active_clients
+            except:
+                dead_clients.append(hostname)
+        
+        # Limpieza
+        for h in dead_clients:
+            self.clients_map.pop(h, None)
+
+    def send_private_config(self, target_hostname, allowed_list):
+        """Envía reglas a UN SOLO alumno"""
+        sock = self.clients_map.get(target_hostname)
+        if sock:
+            msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
+            try:
+                sock.sendall(msg.encode('utf-8'))
+                print(f"[SERVIDOR] Reglas privadas enviadas a {target_hostname}")
+                return True
+            except:
+                return False
+        return False
 
     def handle_client(self, client_sock, addr):
         ip = addr[0]
@@ -131,20 +151,25 @@ class ServerThread(threading.Thread):
                 
                 if msg['type'] == 'REGISTER':
                     hostname = msg['hostname']
+                    # REGISTRAMOS AL ALUMNO EN EL DICCIONARIO
+                    self.clients_map[hostname] = client_sock
                     self.update_callback(hostname, ip, "🟢 Conectado")
+                
                 elif msg['type'] == 'ALERT':
                     violations = ", ".join(msg['violations'])
                     self.update_callback(hostname, ip, f"🔴 ALERT: {violations}")
+                
                 elif msg['type'] == 'STATUS' and msg.get('status') == 'CLEAN':
                     self.update_callback(hostname, ip, "🟢 Seguro")
         except: pass
         finally:
             self.update_callback(hostname, ip, "⚪ Desconectado")
-            if client_sock in self.clients:
-                self.clients.remove(client_sock)
+            # Si se desconecta, lo borramos del mapa
+            if hostname in self.clients_map:
+                del self.clients_map[hostname]
             client_sock.close()
 
-# --- INTERFAZ GRÁFICA DEL PROFESOR ---
+# --- INTERFAZ GRÁFICA ---
 class TeacherDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -160,42 +185,33 @@ class TeacherDashboard(QMainWindow):
         self.server_thread.daemon = True
         self.server_thread.start()
 
-        # Widget Principal
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
-        
-        # Layout Vertical Global (Top Bar + Contenido Abajo)
         global_layout = QVBoxLayout()
         global_layout.setContentsMargins(20, 20, 20, 20)
         global_layout.setSpacing(15)
         main_widget.setLayout(global_layout)
 
-        # --- 1. BARRA SUPERIOR (TOP BAR) ---
+        # 1. TOP BAR
         top_bar = QHBoxLayout()
-        
-        # Título principal de la app arriba a la izquierda
         lbl_main_title = QLabel("SCP Monitor")
         lbl_main_title.setObjectName("Title")
         top_bar.addWidget(lbl_main_title)
-        
-        top_bar.addStretch() # Espacio flexible
-        
-        # Botón de Configuración (Tema) a la derecha
+        top_bar.addStretch() 
         self.btn_theme = QPushButton("⚙️ Tema Oscuro")
-        self.btn_theme.setObjectName("Config") # ID para estilo CSS
+        self.btn_theme.setObjectName("Config")
         self.btn_theme.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_theme.setFixedWidth(150)
         self.btn_theme.clicked.connect(self.toggle_theme)
         top_bar.addWidget(self.btn_theme)
-        
         global_layout.addLayout(top_bar)
 
-        # --- 2. CONTENIDO PRINCIPAL (Paneles) ---
+        # 2. CONTENIDO
         content_layout = QHBoxLayout()
         content_layout.setSpacing(25)
         global_layout.addLayout(content_layout)
 
-        # A. PANEL LATERAL (Sidebar)
+        # A. PANEL LATERAL
         side_panel = QFrame()
         side_panel.setFixedWidth(300)
         side_layout = QVBoxLayout()
@@ -204,10 +220,8 @@ class TeacherDashboard(QMainWindow):
         side_panel.setLayout(side_layout)
         
         lbl_control = QLabel("Controles de Examen")
-        # Fuente un poco más grande
         lbl_control.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         side_layout.addWidget(lbl_control)
-        
         side_layout.addSpacing(10)
         
         lbl_wb = QLabel("🔓 Permitir Aplicaciones:")
@@ -221,12 +235,20 @@ class TeacherDashboard(QMainWindow):
         side_layout.addWidget(self.chk_discord)
         side_layout.addWidget(self.chk_calc)
         
-        side_layout.addSpacing(10)
+        side_layout.addSpacing(20)
         
-        self.btn_apply = QPushButton("Aplicar Reglas")
+        # BOTÓN 1: GLOBAL
+        self.btn_apply = QPushButton("Aplicar a TODOS")
         self.btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_apply.clicked.connect(self.broadcast_rules)
         side_layout.addWidget(self.btn_apply)
+
+        # BOTÓN 2: INDIVIDUAL (NUEVO)
+        self.btn_apply_single = QPushButton("Aplicar SOLO a Selección")
+        self.btn_apply_single.setObjectName("SingleUser") # ID para estilo Naranja
+        self.btn_apply_single.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_apply_single.clicked.connect(self.apply_to_selection)
+        side_layout.addWidget(self.btn_apply_single)
         
         side_layout.addStretch()
         
@@ -240,10 +262,8 @@ class TeacherDashboard(QMainWindow):
 
         # B. TABLA CENTRAL
         table_layout = QVBoxLayout()
-        
-        # Subtitulo de la tabla
-        lbl_table = QLabel("Estado de Alumnos")
-        lbl_table.setStyleSheet("font-weight: bold; font-size: 16px;")
+        lbl_table = QLabel("Estado de Alumnos (Selecciona para acciones individuales)")
+        lbl_table.setStyleSheet("font-weight: bold; font-size: 14px; color: #89b4fa;")
         table_layout.addWidget(lbl_table)
         
         self.table = QTableWidget()
@@ -254,11 +274,14 @@ class TeacherDashboard(QMainWindow):
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(45)
+        
+        # Permitir seleccionar filas enteras, pero solo una a la vez
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        
         table_layout.addWidget(self.table)
 
         content_layout.addLayout(table_layout)
-
-        # Aplicar tema inicial
         self.apply_theme()
 
     def toggle_theme(self):
@@ -273,10 +296,7 @@ class TeacherDashboard(QMainWindow):
             self.setStyleSheet(THEME_LIGHT)
             self.btn_theme.setText("☀️ Modo Día")
         
-        # Re-colorear la tabla si hay filas existentes
-        # (Para que el texto cambie de color sin esperar un update de red)
         for row in range(self.table.rowCount()):
-            # Obtenemos el texto actual
             item = self.table.item(row, 2)
             if item:
                 self.update_row_color(row, item.text())
@@ -298,7 +318,6 @@ class TeacherDashboard(QMainWindow):
         self.update_row_color(found_row, status)
 
     def update_row_color(self, row, status):
-        # Función auxiliar para pintar colores según el tema
         if self.is_dark_mode:
             color_ok = "#a6e3a1"
             color_alert = "#f38ba8"
@@ -320,18 +339,43 @@ class TeacherDashboard(QMainWindow):
         item.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.table.setItem(row, 2, item)
 
-    def broadcast_rules(self):
+    def get_rules_from_checkboxes(self):
+        """Helper para obtener la lista de checkboxes"""
         allowed = []
         if self.chk_chrome.isChecked(): allowed.extend(["chrome.exe", "msedge.exe"])
         if self.chk_discord.isChecked(): allowed.append("discord.exe")
         if self.chk_calc.isChecked(): allowed.append("calculatorapp.exe")
-        
+        return allowed
+
+    def broadcast_rules(self):
+        allowed = self.get_rules_from_checkboxes()
         self.server_thread.broadcast_config(allowed)
         
         original_text = self.btn_apply.text()
-        self.btn_apply.setText("¡Enviado!")
+        self.btn_apply.setText("¡Enviado a TODOS!")
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(2000, lambda: self.btn_apply.setText(original_text))
+
+    def apply_to_selection(self):
+        # 1. Obtener la fila seleccionada
+        selected_items = self.table.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Atención", "Selecciona primero un alumno de la lista.")
+            return
+        
+        # Como seleccionamos filas enteras, el primer item es el nombre (columna 0)
+        target_name = selected_items[0].text()
+        
+        # 2. Obtener reglas
+        allowed = self.get_rules_from_checkboxes()
+        
+        # 3. Enviar mensaje privado
+        success = self.server_thread.send_private_config(target_name, allowed)
+        
+        if success:
+            QMessageBox.information(self, "Éxito", f"Reglas aplicadas SOLO a: {target_name}")
+        else:
+            QMessageBox.critical(self, "Error", f"No se pudo enviar a {target_name}. Quizás se desconectó.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
