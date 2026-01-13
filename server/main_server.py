@@ -5,7 +5,8 @@ import json
 import time
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
-                             QPushButton, QCheckBox, QFrame, QMessageBox, QAbstractItemView)
+                             QPushButton, QCheckBox, QFrame, QMessageBox, QAbstractItemView,
+                             QTabWidget, QTextEdit) # <--- Agregamos QTabWidget y QTextEdit
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
@@ -16,11 +17,14 @@ QWidget { font-family: 'Segoe UI', sans-serif; font-size: 14px; color: #cdd6f4; 
 QFrame { background-color: #181825; border-radius: 12px; }
 QTableWidget { background-color: #181825; border: 1px solid #313244; gridline-color: #313244; }
 QHeaderView::section { background-color: #11111b; padding: 10px; border: none; font-weight: bold; color: #89b4fa; font-size: 15px; }
+QTabWidget::pane { border: 1px solid #313244; border-radius: 8px; background-color: #1e1e2e; }
+QTabBar::tab { background: #181825; color: #cdd6f4; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
+QTabBar::tab:selected { background: #89b4fa; color: #1e1e2e; font-weight: bold; }
+QTextEdit { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; }
 QPushButton { background-color: #89b4fa; color: #1e1e2e; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #b4befe; }
 QPushButton#Config { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 8px; }
 QPushButton#Config:hover { background-color: #45475a; }
-/* Estilo para el botón secundario (Aplicar a uno solo) */
 QPushButton#SingleUser { background-color: #fab387; color: #1e1e2e; }
 QPushButton#SingleUser:hover { background-color: #f9e2af; }
 QCheckBox { spacing: 8px; color: #cdd6f4; }
@@ -36,11 +40,14 @@ QWidget { font-family: 'Segoe UI', sans-serif; font-size: 14px; color: #4c4f69; 
 QFrame { background-color: #e6e9ef; border-radius: 12px; border: 1px solid #dce0e8; }
 QTableWidget { background-color: #ffffff; border: 1px solid #ccd0da; gridline-color: #ccd0da; }
 QHeaderView::section { background-color: #dce0e8; padding: 10px; border: none; font-weight: bold; color: #1e66f5; font-size: 15px; }
+QTabWidget::pane { border: 1px solid #dce0e8; border-radius: 8px; background-color: #eff1f5; }
+QTabBar::tab { background: #e6e9ef; color: #4c4f69; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
+QTabBar::tab:selected { background: #1e66f5; color: #ffffff; font-weight: bold; }
+QTextEdit { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; }
 QPushButton { background-color: #1e66f5; color: #ffffff; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #7287fd; }
 QPushButton#Config { background-color: #e6e9ef; color: #4c4f69; border: 1px solid #dce0e8; padding: 8px; }
 QPushButton#Config:hover { background-color: #dce0e8; }
-/* Estilo para el botón secundario */
 QPushButton#SingleUser { background-color: #fe640b; color: #ffffff; }
 QPushButton#SingleUser:hover { background-color: #ff9d6e; }
 QCheckBox { spacing: 8px; color: #4c4f69; }
@@ -92,9 +99,6 @@ class ServerThread(threading.Thread):
         self.update_callback = callback
         self.server_socket = None
         self.running = True
-        
-        # CAMBIO IMPORTANTE: Ahora es un diccionario { "NombreAlumno": Socket }
-        # Esto nos permite buscar el socket de alguien específico.
         self.clients_map = {} 
 
     def run(self):
@@ -111,33 +115,37 @@ class ServerThread(threading.Thread):
             except: break
 
     def broadcast_config(self, allowed_list):
-        """Envía reglas a TODOS"""
         msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
-        print(f"[SERVIDOR] Broadcast rules: {allowed_list}")
-        
-        # Iteramos sobre los valores (los sockets) del diccionario
+        self._broadcast(msg)
+
+    def broadcast_exam_content(self, title, content):
+        """Envía la consigna del examen a todos"""
+        msg = json.dumps({
+            "type": "EXAM_CONTENT",
+            "title": title,
+            "content": content
+        })
+        print(f"[SERVIDOR] Enviando examen: {title}")
+        self._broadcast(msg)
+
+    def _broadcast(self, json_msg):
         dead_clients = []
         for hostname, sock in self.clients_map.items():
             try:
-                sock.sendall(msg.encode('utf-8'))
+                sock.sendall(json_msg.encode('utf-8'))
             except:
                 dead_clients.append(hostname)
-        
-        # Limpieza
         for h in dead_clients:
             self.clients_map.pop(h, None)
 
     def send_private_config(self, target_hostname, allowed_list):
-        """Envía reglas a UN SOLO alumno"""
         sock = self.clients_map.get(target_hostname)
         if sock:
             msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
             try:
                 sock.sendall(msg.encode('utf-8'))
-                print(f"[SERVIDOR] Reglas privadas enviadas a {target_hostname}")
                 return True
-            except:
-                return False
+            except: return False
         return False
 
     def handle_client(self, client_sock, addr):
@@ -151,7 +159,6 @@ class ServerThread(threading.Thread):
                 
                 if msg['type'] == 'REGISTER':
                     hostname = msg['hostname']
-                    # REGISTRAMOS AL ALUMNO EN EL DICCIONARIO
                     self.clients_map[hostname] = client_sock
                     self.update_callback(hostname, ip, "🟢 Conectado")
                 
@@ -164,7 +171,6 @@ class ServerThread(threading.Thread):
         except: pass
         finally:
             self.update_callback(hostname, ip, "⚪ Desconectado")
-            # Si se desconecta, lo borramos del mapa
             if hostname in self.clients_map:
                 del self.clients_map[hostname]
             client_sock.close()
@@ -206,52 +212,46 @@ class TeacherDashboard(QMainWindow):
         top_bar.addWidget(self.btn_theme)
         global_layout.addLayout(top_bar)
 
-        # 2. CONTENIDO
+        # 2. CONTENIDO PRINCIPAL (Layout Horizontal)
         content_layout = QHBoxLayout()
         content_layout.setSpacing(25)
         global_layout.addLayout(content_layout)
 
-        # A. PANEL LATERAL
+        # A. PANEL LATERAL (Sidebar - Siempre visible)
         side_panel = QFrame()
-        side_panel.setFixedWidth(300)
+        side_panel.setFixedWidth(280)
         side_layout = QVBoxLayout()
-        side_layout.setContentsMargins(25, 30, 25, 30)
+        side_layout.setContentsMargins(20, 25, 20, 25)
         side_layout.setSpacing(15)
         side_panel.setLayout(side_layout)
         
-        lbl_control = QLabel("Controles de Examen")
+        lbl_control = QLabel("Controles")
         lbl_control.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         side_layout.addWidget(lbl_control)
-        side_layout.addSpacing(10)
+        side_layout.addSpacing(5)
         
-        lbl_wb = QLabel("🔓 Permitir Aplicaciones:")
+        lbl_wb = QLabel("🔓 Permitir Apps:")
         side_layout.addWidget(lbl_wb)
-
         self.chk_chrome = QCheckBox("Navegador Web")
-        self.chk_discord = QCheckBox("Discord / Chat")
+        self.chk_discord = QCheckBox("Discord")
         self.chk_calc = QCheckBox("Calculadora")
-        
         side_layout.addWidget(self.chk_chrome)
         side_layout.addWidget(self.chk_discord)
         side_layout.addWidget(self.chk_calc)
+        side_layout.addSpacing(15)
         
-        side_layout.addSpacing(20)
-        
-        # BOTÓN 1: GLOBAL
         self.btn_apply = QPushButton("Aplicar a TODOS")
         self.btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_apply.clicked.connect(self.broadcast_rules)
         side_layout.addWidget(self.btn_apply)
 
-        # BOTÓN 2: INDIVIDUAL (NUEVO)
-        self.btn_apply_single = QPushButton("Aplicar SOLO a Selección")
-        self.btn_apply_single.setObjectName("SingleUser") # ID para estilo Naranja
+        self.btn_apply_single = QPushButton("Aplicar a Selección")
+        self.btn_apply_single.setObjectName("SingleUser")
         self.btn_apply_single.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_apply_single.clicked.connect(self.apply_to_selection)
         side_layout.addWidget(self.btn_apply_single)
         
         side_layout.addStretch()
-        
         real_ip = get_lan_ip()
         self.lbl_info = QLabel(f"IP Servidor:\n{real_ip}")
         self.lbl_info.setObjectName("SubInfo")
@@ -260,11 +260,18 @@ class TeacherDashboard(QMainWindow):
 
         content_layout.addWidget(side_panel)
 
-        # B. TABLA CENTRAL
-        table_layout = QVBoxLayout()
-        lbl_table = QLabel("Estado de Alumnos (Selecciona para acciones individuales)")
-        lbl_table.setStyleSheet("font-weight: bold; font-size: 14px; color: #89b4fa;")
-        table_layout.addWidget(lbl_table)
+        # B. AREA DE PESTAÑAS (Tabs - Lado Derecho)
+        self.tabs = QTabWidget()
+        content_layout.addWidget(self.tabs)
+
+        # --- PESTAÑA 1: MONITOR ---
+        self.tab_monitor = QWidget()
+        tab_mon_layout = QVBoxLayout()
+        self.tab_monitor.setLayout(tab_mon_layout)
+        
+        lbl_table = QLabel("Estado de Alumnos")
+        lbl_table.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
+        tab_mon_layout.addWidget(lbl_table)
         
         self.table = QTableWidget()
         self.table.setColumnCount(3)
@@ -274,14 +281,44 @@ class TeacherDashboard(QMainWindow):
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(45)
-        
-        # Permitir seleccionar filas enteras, pero solo una a la vez
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        tab_mon_layout.addWidget(self.table)
         
-        table_layout.addWidget(self.table)
+        self.tabs.addTab(self.tab_monitor, "📡 Monitor")
 
-        content_layout.addLayout(table_layout)
+        # --- PESTAÑA 2: CONSIGNA (EXAMEN) ---
+        self.tab_exam = QWidget()
+        tab_exam_layout = QVBoxLayout()
+        self.tab_exam.setLayout(tab_exam_layout)
+        
+        lbl_exam_title = QLabel("Redactar Consigna del Examen")
+        lbl_exam_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        tab_exam_layout.addWidget(lbl_exam_title)
+
+        # Input Titulo
+        self.input_exam_title = QTextEdit()
+        self.input_exam_title.setPlaceholderText("Título del Examen (Ej: Parcial de Historia)")
+        self.input_exam_title.setFixedHeight(40)
+        tab_exam_layout.addWidget(self.input_exam_title)
+
+        # Input Contenido
+        self.input_exam_content = QTextEdit()
+        self.input_exam_content.setPlaceholderText("Escribe aquí las preguntas o instrucciones del examen...")
+        tab_exam_layout.addWidget(self.input_exam_content)
+
+        btn_send_exam = QPushButton("📤 ENVIAR EXAMEN A ALUMNOS")
+        btn_send_exam.setFixedHeight(50)
+        btn_send_exam.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_send_exam.clicked.connect(self.send_exam)
+        tab_exam_layout.addWidget(btn_send_exam)
+
+        self.tabs.addTab(self.tab_exam, "📝 Consigna")
+
+        # --- PESTAÑA 3: CHAT (Futuro) ---
+        self.tab_chat = QWidget()
+        self.tabs.addTab(self.tab_chat, "💬 Chat (Próximamente)")
+
         self.apply_theme()
 
     def toggle_theme(self):
@@ -298,8 +335,7 @@ class TeacherDashboard(QMainWindow):
         
         for row in range(self.table.rowCount()):
             item = self.table.item(row, 2)
-            if item:
-                self.update_row_color(row, item.text())
+            if item: self.update_row_color(row, item.text())
 
     def update_row(self, hostname, ip, status):
         found_row = -1
@@ -319,28 +355,20 @@ class TeacherDashboard(QMainWindow):
 
     def update_row_color(self, row, status):
         if self.is_dark_mode:
-            color_ok = "#a6e3a1"
-            color_alert = "#f38ba8"
-            color_disc = "#6c7086"
+            c = {"ok": "#a6e3a1", "alert": "#f38ba8", "disc": "#6c7086"}
         else:
-            color_ok = "#40a02b"
-            color_alert = "#d20f39"
-            color_disc = "#9ca0b0"
+            c = {"ok": "#40a02b", "alert": "#d20f39", "disc": "#9ca0b0"}
 
-        if "ALERT" in status:
-            final_color = color_alert
-        elif "Desconectado" in status:
-            final_color = color_disc
-        else:
-            final_color = color_ok
+        if "ALERT" in status: color = c["alert"]
+        elif "Desconectado" in status: color = c["disc"]
+        else: color = c["ok"]
 
         item = QTableWidgetItem(status)
-        item.setForeground(QColor(final_color))
+        item.setForeground(QColor(color))
         item.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.table.setItem(row, 2, item)
 
     def get_rules_from_checkboxes(self):
-        """Helper para obtener la lista de checkboxes"""
         allowed = []
         if self.chk_chrome.isChecked(): allowed.extend(["chrome.exe", "msedge.exe"])
         if self.chk_discord.isChecked(): allowed.append("discord.exe")
@@ -350,32 +378,35 @@ class TeacherDashboard(QMainWindow):
     def broadcast_rules(self):
         allowed = self.get_rules_from_checkboxes()
         self.server_thread.broadcast_config(allowed)
-        
-        original_text = self.btn_apply.text()
-        self.btn_apply.setText("¡Enviado a TODOS!")
+        self.btn_apply.setText("¡Enviado!")
         from PyQt6.QtCore import QTimer
-        QTimer.singleShot(2000, lambda: self.btn_apply.setText(original_text))
+        QTimer.singleShot(2000, lambda: self.btn_apply.setText("Aplicar a TODOS"))
 
     def apply_to_selection(self):
-        # 1. Obtener la fila seleccionada
-        selected_items = self.table.selectedItems()
-        if not selected_items:
-            QMessageBox.warning(self, "Atención", "Selecciona primero un alumno de la lista.")
+        sel = self.table.selectedItems()
+        if not sel:
+            QMessageBox.warning(self, "Atención", "Selecciona un alumno.")
             return
-        
-        # Como seleccionamos filas enteras, el primer item es el nombre (columna 0)
-        target_name = selected_items[0].text()
-        
-        # 2. Obtener reglas
+        target = sel[0].text()
         allowed = self.get_rules_from_checkboxes()
-        
-        # 3. Enviar mensaje privado
-        success = self.server_thread.send_private_config(target_name, allowed)
-        
-        if success:
-            QMessageBox.information(self, "Éxito", f"Reglas aplicadas SOLO a: {target_name}")
+        if self.server_thread.send_private_config(target, allowed):
+            QMessageBox.information(self, "Éxito", f"Reglas aplicadas a {target}")
         else:
-            QMessageBox.critical(self, "Error", f"No se pudo enviar a {target_name}. Quizás se desconectó.")
+            QMessageBox.critical(self, "Error", "No se pudo conectar.")
+
+    def send_exam(self):
+        # LÓGICA DE ENVÍO DE EXAMEN
+        title = self.input_exam_title.toPlainText()
+        content = self.input_exam_content.toPlainText()
+        
+        if not title or not content:
+            QMessageBox.warning(self, "Faltan datos", "Escribe un título y el contenido.")
+            return
+
+        confirm = QMessageBox.question(self, "Confirmar", "¿Enviar examen a TODOS los alumnos conectados?")
+        if confirm == QMessageBox.StandardButton.Yes:
+            self.server_thread.broadcast_exam_content(title, content)
+            QMessageBox.information(self, "Enviado", "El examen ha sido distribuido.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
