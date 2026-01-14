@@ -3,10 +3,12 @@ import socket
 import threading
 import json
 import time
+import base64
+import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
                              QPushButton, QCheckBox, QFrame, QMessageBox, QAbstractItemView,
-                             QTabWidget, QTextEdit) # <--- Agregamos QTabWidget y QTextEdit
+                             QTabWidget, QTextEdit, QFileDialog) 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
@@ -20,7 +22,6 @@ QHeaderView::section { background-color: #11111b; padding: 10px; border: none; f
 QTabWidget::pane { border: 1px solid #313244; border-radius: 8px; background-color: #1e1e2e; }
 QTabBar::tab { background: #181825; color: #cdd6f4; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
 QTabBar::tab:selected { background: #89b4fa; color: #1e1e2e; font-weight: bold; }
-QTextEdit { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; }
 QPushButton { background-color: #89b4fa; color: #1e1e2e; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #b4befe; }
 QPushButton#Config { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 8px; }
@@ -43,7 +44,6 @@ QHeaderView::section { background-color: #dce0e8; padding: 10px; border: none; f
 QTabWidget::pane { border: 1px solid #dce0e8; border-radius: 8px; background-color: #eff1f5; }
 QTabBar::tab { background: #e6e9ef; color: #4c4f69; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
 QTabBar::tab:selected { background: #1e66f5; color: #ffffff; font-weight: bold; }
-QTextEdit { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; }
 QPushButton { background-color: #1e66f5; color: #ffffff; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #7287fd; }
 QPushButton#Config { background-color: #e6e9ef; color: #4c4f69; border: 1px solid #dce0e8; padding: 8px; }
@@ -118,15 +118,29 @@ class ServerThread(threading.Thread):
         msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
         self._broadcast(msg)
 
-    def broadcast_exam_content(self, title, content):
-        """Envía la consigna del examen a todos"""
-        msg = json.dumps({
-            "type": "EXAM_CONTENT",
-            "title": title,
-            "content": content
-        })
-        print(f"[SERVIDOR] Enviando examen: {title}")
-        self._broadcast(msg)
+    def broadcast_pdf(self, filepath):
+        """Lee el PDF, lo convierte a Base64 y lo envía"""
+        try:
+            filename = os.path.basename(filepath)
+            filesize = os.path.getsize(filepath)
+            
+            # Limite de seguridad: 10MB para no colgar el socket
+            if filesize > 10 * 1024 * 1024:
+                return False, "El archivo es muy pesado (Max 10MB)"
+
+            with open(filepath, "rb") as f:
+                encoded_data = base64.b64encode(f.read()).decode('utf-8')
+
+            msg = json.dumps({
+                "type": "EXAM_FILE",
+                "filename": filename,
+                "file_data": encoded_data
+            })
+            print(f"[SERVIDOR] Enviando PDF: {filename} ({filesize} bytes)")
+            self._broadcast(msg)
+            return True, "Enviado correctamente"
+        except Exception as e:
+            return False, str(e)
 
     def _broadcast(self, json_msg):
         dead_clients = []
@@ -161,11 +175,9 @@ class ServerThread(threading.Thread):
                     hostname = msg['hostname']
                     self.clients_map[hostname] = client_sock
                     self.update_callback(hostname, ip, "🟢 Conectado")
-                
                 elif msg['type'] == 'ALERT':
                     violations = ", ".join(msg['violations'])
                     self.update_callback(hostname, ip, f"🔴 ALERT: {violations}")
-                
                 elif msg['type'] == 'STATUS' and msg.get('status') == 'CLEAN':
                     self.update_callback(hostname, ip, "🟢 Seguro")
         except: pass
@@ -182,6 +194,7 @@ class TeacherDashboard(QMainWindow):
         self.setWindowTitle("SCP - Monitor Docente Pro")
         self.resize(1150, 750)
         self.is_dark_mode = True 
+        self.selected_pdf_path = None
         
         self.broadcaster = BroadcastSender()
         self.broadcaster.daemon = True 
@@ -212,12 +225,12 @@ class TeacherDashboard(QMainWindow):
         top_bar.addWidget(self.btn_theme)
         global_layout.addLayout(top_bar)
 
-        # 2. CONTENIDO PRINCIPAL (Layout Horizontal)
+        # 2. CONTENIDO PRINCIPAL
         content_layout = QHBoxLayout()
         content_layout.setSpacing(25)
         global_layout.addLayout(content_layout)
 
-        # A. PANEL LATERAL (Sidebar - Siempre visible)
+        # A. PANEL LATERAL
         side_panel = QFrame()
         side_panel.setFixedWidth(280)
         side_layout = QVBoxLayout()
@@ -260,11 +273,11 @@ class TeacherDashboard(QMainWindow):
 
         content_layout.addWidget(side_panel)
 
-        # B. AREA DE PESTAÑAS (Tabs - Lado Derecho)
+        # B. TABS
         self.tabs = QTabWidget()
         content_layout.addWidget(self.tabs)
 
-        # --- PESTAÑA 1: MONITOR ---
+        # TAB 1: MONITOR
         self.tab_monitor = QWidget()
         tab_mon_layout = QVBoxLayout()
         self.tab_monitor.setLayout(tab_mon_layout)
@@ -284,42 +297,83 @@ class TeacherDashboard(QMainWindow):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         tab_mon_layout.addWidget(self.table)
-        
         self.tabs.addTab(self.tab_monitor, "📡 Monitor")
 
-        # --- PESTAÑA 2: CONSIGNA (EXAMEN) ---
+        # TAB 2: PDF (CONSIGNA)
         self.tab_exam = QWidget()
         tab_exam_layout = QVBoxLayout()
+        tab_exam_layout.setContentsMargins(40, 40, 40, 40)
+        tab_exam_layout.setSpacing(20)
         self.tab_exam.setLayout(tab_exam_layout)
         
-        lbl_exam_title = QLabel("Redactar Consigna del Examen")
-        lbl_exam_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        lbl_exam_title = QLabel("Cargar Archivo de Examen (PDF)")
+        lbl_exam_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        lbl_exam_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tab_exam_layout.addWidget(lbl_exam_title)
 
-        # Input Titulo
-        self.input_exam_title = QTextEdit()
-        self.input_exam_title.setPlaceholderText("Título del Examen (Ej: Parcial de Historia)")
-        self.input_exam_title.setFixedHeight(40)
-        tab_exam_layout.addWidget(self.input_exam_title)
+        # Zona de carga
+        self.lbl_file_status = QLabel("Ningún archivo seleccionado")
+        self.lbl_file_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_file_status.setStyleSheet("color: #6c7086; font-size: 14px;")
+        tab_exam_layout.addWidget(self.lbl_file_status)
 
-        # Input Contenido
-        self.input_exam_content = QTextEdit()
-        self.input_exam_content.setPlaceholderText("Escribe aquí las preguntas o instrucciones del examen...")
-        tab_exam_layout.addWidget(self.input_exam_content)
+        btn_select_file = QPushButton("📂 Seleccionar PDF")
+        btn_select_file.setFixedSize(200, 50)
+        btn_select_file.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_select_file.clicked.connect(self.select_pdf)
+        
+        # Centramos el botón
+        h_layout_btn = QHBoxLayout()
+        h_layout_btn.addStretch()
+        h_layout_btn.addWidget(btn_select_file)
+        h_layout_btn.addStretch()
+        tab_exam_layout.addLayout(h_layout_btn)
 
-        btn_send_exam = QPushButton("📤 ENVIAR EXAMEN A ALUMNOS")
-        btn_send_exam.setFixedHeight(50)
-        btn_send_exam.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_send_exam.clicked.connect(self.send_exam)
-        tab_exam_layout.addWidget(btn_send_exam)
+        tab_exam_layout.addSpacing(20)
+        
+        self.btn_send_pdf = QPushButton("📤 ENVIAR PDF A ALUMNOS")
+        self.btn_send_pdf.setFixedHeight(60)
+        self.btn_send_pdf.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_send_pdf.setEnabled(False) # Deshabilitado hasta que seleccione algo
+        self.btn_send_pdf.setStyleSheet("background-color: #313244; color: #6c7086;") # Estilo deshabilitado
+        self.btn_send_pdf.clicked.connect(self.send_pdf_broadcast)
+        tab_exam_layout.addWidget(self.btn_send_pdf)
+        
+        tab_exam_layout.addStretch()
 
-        self.tabs.addTab(self.tab_exam, "📝 Consigna")
-
-        # --- PESTAÑA 3: CHAT (Futuro) ---
+        self.tabs.addTab(self.tab_exam, "📝 Consigna PDF")
+        
         self.tab_chat = QWidget()
-        self.tabs.addTab(self.tab_chat, "💬 Chat (Próximamente)")
+        self.tabs.addTab(self.tab_chat, "💬 Chat")
 
         self.apply_theme()
+
+    def select_pdf(self):
+        fname, _ = QFileDialog.getOpenFileName(self, 'Abrir Archivo de Examen', '.', "PDF Files (*.pdf)")
+        if fname:
+            self.selected_pdf_path = fname
+            filename = os.path.basename(fname)
+            self.lbl_file_status.setText(f"✅ Archivo listo: {filename}")
+            self.lbl_file_status.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 16px;")
+            
+            # Habilitar botón de enviar
+            self.btn_send_pdf.setEnabled(True)
+            self.btn_send_pdf.setText(f"📤 ENVIAR '{filename}' AHORA")
+            self.btn_send_pdf.setStyleSheet("background-color: #fab387; color: #1e1e2e; font-size: 16px; font-weight: bold;")
+
+    def send_pdf_broadcast(self):
+        if not self.selected_pdf_path: return
+        
+        confirm = QMessageBox.question(self, "Confirmar Envío", 
+                                       "¿Estás seguro de enviar este archivo a TODOS los alumnos conectados?\n\nSe abrirá automáticamente en sus pantallas.",
+                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        
+        if confirm == QMessageBox.StandardButton.Yes:
+            success, msg = self.server_thread.broadcast_pdf(self.selected_pdf_path)
+            if success:
+                QMessageBox.information(self, "Éxito", "El archivo se ha enviado correctamente.")
+            else:
+                QMessageBox.critical(self, "Error", f"Fallo el envío: {msg}")
 
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
@@ -368,15 +422,12 @@ class TeacherDashboard(QMainWindow):
         item.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.table.setItem(row, 2, item)
 
-    def get_rules_from_checkboxes(self):
+    def broadcast_rules(self):
         allowed = []
         if self.chk_chrome.isChecked(): allowed.extend(["chrome.exe", "msedge.exe"])
         if self.chk_discord.isChecked(): allowed.append("discord.exe")
         if self.chk_calc.isChecked(): allowed.append("calculatorapp.exe")
-        return allowed
-
-    def broadcast_rules(self):
-        allowed = self.get_rules_from_checkboxes()
+        
         self.server_thread.broadcast_config(allowed)
         self.btn_apply.setText("¡Enviado!")
         from PyQt6.QtCore import QTimer
@@ -388,25 +439,16 @@ class TeacherDashboard(QMainWindow):
             QMessageBox.warning(self, "Atención", "Selecciona un alumno.")
             return
         target = sel[0].text()
-        allowed = self.get_rules_from_checkboxes()
+        
+        allowed = []
+        if self.chk_chrome.isChecked(): allowed.extend(["chrome.exe", "msedge.exe"])
+        if self.chk_discord.isChecked(): allowed.append("discord.exe")
+        if self.chk_calc.isChecked(): allowed.append("calculatorapp.exe")
+
         if self.server_thread.send_private_config(target, allowed):
             QMessageBox.information(self, "Éxito", f"Reglas aplicadas a {target}")
         else:
             QMessageBox.critical(self, "Error", "No se pudo conectar.")
-
-    def send_exam(self):
-        # LÓGICA DE ENVÍO DE EXAMEN
-        title = self.input_exam_title.toPlainText()
-        content = self.input_exam_content.toPlainText()
-        
-        if not title or not content:
-            QMessageBox.warning(self, "Faltan datos", "Escribe un título y el contenido.")
-            return
-
-        confirm = QMessageBox.question(self, "Confirmar", "¿Enviar examen a TODOS los alumnos conectados?")
-        if confirm == QMessageBox.StandardButton.Yes:
-            self.server_thread.broadcast_exam_content(title, content)
-            QMessageBox.information(self, "Enviado", "El examen ha sido distribuido.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

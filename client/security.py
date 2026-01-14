@@ -4,15 +4,16 @@ import shutil
 
 class SecurityGuard:
     def __init__(self):
-        # Configuración por defecto
+        # Lista negra (Solo para avisar, NO para matar)
         self.forbidden_processes = [
             "chrome.exe", "firefox.exe", "msedge.exe", "opera.exe", 
-            "discord.exe", "chatgpt.exe", "cursor.exe"
+            "discord.exe", "chatgpt.exe"
         ]
         
+        # Lista de IAs (Para sabotear y matar VS Code)
         self.ai_extensions = [
             "github.copilot", "blackbox", "tabnine", 
-            "codeium", "continue"
+            "codeium", "continue", "cursor"
         ]
         
         self.allowed_apps = [] 
@@ -21,29 +22,31 @@ class SecurityGuard:
         self.allowed_apps = [app.lower() for app in allowed_list]
 
     def get_extensions_paths(self):
+        """Busca en más ubicaciones posibles de extensiones"""
         paths = []
         user_profile = os.environ.get('USERPROFILE')
+        
+        # Ruta 1: Carpeta estándar .vscode
         paths.append(os.path.join(user_profile, '.vscode', 'extensions'))
-        paths.append(r"C:\Program Files\Microsoft VS Code\resources\app\extensions")
+        
+        # Ruta 2: AppData (A veces Cursor o versiones portables las guardan aqui)
+        appdata = os.environ.get('APPDATA')
+        paths.append(os.path.join(appdata, 'Code', 'User', 'globalStorage'))
+        
         return paths
-
-    def kill_specific_process(self, proc_name):
-        """Mata un proceso específico por nombre (ej: chrome.exe)"""
-        try:
-            os.system(f"taskkill /F /IM {proc_name} /T >nul 2>&1")
-        except: pass
 
     def kill_vscode_processes(self):
         """Mata SOLO VS Code (Se usa solo si se detecta IA)"""
         targets = ["Code.exe", "code.exe", "cursor.exe"]
         for target in targets:
-            self.kill_specific_process(target)
+            try:
+                os.system(f"taskkill /F /IM {target} /T >nul 2>&1")
+            except: pass
 
     def sabotage_ai_extensions(self):
         """
         Escanea carpetas. 
         Retorna True SOLO si encontró una IA viva y la bloqueó.
-        Retorna False si no encontró nada o ya estaba todo bloqueado.
         """
         changes_made = False
         extension_dirs = self.get_extensions_paths()
@@ -56,18 +59,15 @@ class SecurityGuard:
                     folder_lower = folder.lower()
                     full_path = os.path.join(base_path, folder)
 
-                    # Si ya está bloqueado, lo ignoramos (NO hacemos nada)
                     if folder_lower.endswith(".bloqueado"): continue
 
-                    # Si es una IA y NO está bloqueada...
                     is_ai = any(key in folder_lower for key in self.ai_extensions)
                     
                     if is_ai:
-                        # ¡ENCONTRAMOS UNA! AHORA SÍ ACTUAMOS
                         new_path = full_path + ".BLOQUEADO"
                         try:
                             os.rename(full_path, new_path)
-                            changes_made = True # Marcamos que hicimos un cambio
+                            changes_made = True 
                             print(f"[SEGURIDAD] IA Bloqueada: {folder}")
                         except: pass
             except: pass
@@ -75,7 +75,7 @@ class SecurityGuard:
         return changes_made
 
     def get_running_violations(self):
-        """Devuelve procesos prohibidos activos"""
+        """Devuelve procesos prohibidos activos (SOLO PARA INFORMAR)"""
         found = []
         for proc in psutil.process_iter(['name']):
             try:

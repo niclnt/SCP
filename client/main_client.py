@@ -4,68 +4,102 @@ import threading
 import json
 import time
 import os
+import base64
+import tempfile
+import fitz  # <--- Librería PyMuPDF para renderizar PDFs
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QLineEdit, QPushButton, QComboBox, QMessageBox, QFrame, QTextEdit)
+                             QLineEdit, QPushButton, QComboBox, QMessageBox, QFrame, 
+                             QTabWidget, QScrollArea)
 from PyQt6.QtCore import pyqtSignal, QThread, Qt
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont, QImage, QPixmap
 
-# IMPORTANTE: Asegúrate de tener estas líneas para las rutas
+# Rutas y Seguridad
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from security import guard
 
-# --- TEMAS (Incluye estilos para la ventana de examen) ---
+# --- TEMAS ---
 THEME_DARK = """
 QWidget { background-color: #1e1e2e; font-family: 'Segoe UI', sans-serif; color: #cdd6f4; }
 QLineEdit, QTextEdit { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; font-size: 14px; }
 QComboBox { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; }
+QTabWidget::pane { border: 1px solid #313244; border-radius: 8px; background-color: #1e1e2e; }
+QTabBar::tab { background: #181825; color: #cdd6f4; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
+QTabBar::tab:selected { background: #89b4fa; color: #1e1e2e; font-weight: bold; }
 QPushButton { background-color: #89b4fa; color: #1e1e2e; border-radius: 8px; padding: 12px; font-weight: bold; }
 QPushButton:hover { background-color: #b4befe; }
 QPushButton#Locked { background-color: #f38ba8; color: #181825; }
-QPushButton#Config { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 8px; }
 QLabel#Title { font-size: 22px; font-weight: bold; color: #fab387; }
 QFrame { background-color: #181825; border-radius: 12px; }
+/* Estilo del Scroll del PDF */
+QScrollArea { border: none; background-color: #181825; }
 """
 
 THEME_LIGHT = """
 QWidget { background-color: #eff1f5; font-family: 'Segoe UI', sans-serif; color: #4c4f69; }
 QLineEdit, QTextEdit { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; }
 QComboBox { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; }
+QTabWidget::pane { border: 1px solid #dce0e8; border-radius: 8px; background-color: #eff1f5; }
+QTabBar::tab { background: #e6e9ef; color: #4c4f69; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
+QTabBar::tab:selected { background: #1e66f5; color: #ffffff; font-weight: bold; }
 QPushButton { background-color: #1e66f5; color: #ffffff; border-radius: 8px; padding: 12px; font-weight: bold; }
 QPushButton:hover { background-color: #7287fd; }
 QPushButton#Locked { background-color: #d20f39; color: #ffffff; }
-QPushButton#Config { background-color: #e6e9ef; color: #4c4f69; border: 1px solid #dce0e8; padding: 8px; }
 QLabel#Title { font-size: 22px; font-weight: bold; color: #fe640b; }
 QFrame { background-color: #e6e9ef; border-radius: 12px; border: 1px solid #dce0e8; }
+QScrollArea { border: none; background-color: #dce0e8; }
 """
 
-# --- NUEVA VENTANA DE EXAMEN ---
-class ExamWindow(QWidget):
-    def __init__(self, title, content, is_dark):
+# --- NUEVO WIDGET VISOR DE PDF ---
+class PDFViewerWidget(QScrollArea):
+    def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"CONSIGNA: {title}")
-        self.resize(600, 700)
+        self.setWidgetResizable(True)
         
-        # Aplicamos tema según lo que tenga el alumno
-        self.setStyleSheet(THEME_DARK if is_dark else THEME_LIGHT)
+        # Contenedor interno donde pegaremos las hojas
+        self.container = QWidget()
+        self.layout_pages = QVBoxLayout()
+        self.layout_pages.setSpacing(10) # Espacio entre páginas
+        self.layout_pages.setAlignment(Qt.AlignmentFlag.AlignHCenter) # Centrar hojas
+        self.container.setLayout(self.layout_pages)
+        
+        self.setWidget(self.container)
 
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+    def load_pdf(self, file_path):
+        # 1. Limpiar visualización anterior
+        for i in reversed(range(self.layout_pages.count())): 
+            self.layout_pages.itemAt(i).widget().setParent(None)
 
-        lbl_head = QLabel(title)
-        lbl_head.setObjectName("Title")
-        lbl_head.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(lbl_head)
+        if not file_path or not os.path.exists(file_path):
+            return
 
-        self.text_area = QTextEdit()
-        self.text_area.setReadOnly(True) # El alumno solo lee
-        self.text_area.setPlainText(content)
-        # Fuente un poco más grande para leer fácil
-        self.text_area.setFont(QFont("Segoe UI", 12)) 
-        layout.addWidget(self.text_area)
+        try:
+            # 2. Abrir PDF con PyMuPDF
+            doc = fitz.open(file_path)
+            
+            # 3. Renderizar página por página
+            for page in doc:
+                # Zoom x2 para que se vea nítido en pantallas modernas
+                matrix = fitz.Matrix(2, 2) 
+                pix = page.get_pixmap(matrix=matrix)
+                
+                # Convertir formato de PyMuPDF a PyQt QImage
+                # Formato RGB888 es el estándar
+                img_data = pix.samples
+                qimg = QImage(img_data, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
+                
+                # Crear etiqueta (Label) y ponerle la imagen
+                lbl_page = QLabel()
+                lbl_page.setPixmap(QPixmap.fromImage(qimg))
+                lbl_page.setStyleSheet("border: 1px solid #000; margin-bottom: 10px;")
+                
+                self.layout_pages.addWidget(lbl_page)
 
-        btn_close = QPushButton("Entendido / Cerrar")
-        btn_close.clicked.connect(self.hide)
-        layout.addWidget(btn_close)
+            doc.close()
+            
+        except Exception as e:
+            lbl_err = QLabel(f"Error renderizando PDF: {str(e)}")
+            lbl_err.setStyleSheet("color: red; font-size: 16px;")
+            self.layout_pages.addWidget(lbl_err)
 
 # --- RED ---
 class DiscoveryThread(QThread):
@@ -86,8 +120,8 @@ class DiscoveryThread(QThread):
 
 class NetworkThread(QThread):
     status_signal = pyqtSignal(str)
-    exam_signal = pyqtSignal(str, str) # Nueva señal para abrir ventana de examen
-
+    pdf_received = pyqtSignal(str) 
+    
     def __init__(self, server_ip, student_name):
         super().__init__()
         self.server_ip = server_ip
@@ -108,22 +142,20 @@ class NetworkThread(QThread):
             self.sock.sendall(reg_msg.encode('utf-8'))
 
             while self.running:
+                # Politica Suave: Solo reportamos, no matamos (salvo VS Code IA)
                 if guard.sabotage_ai_extensions():
                     guard.kill_vscode_processes()
 
                 process_violations = guard.get_running_violations()
-                if process_violations:
-                    for proc in process_violations: guard.kill_specific_process(proc)
-
                 folder_violations = guard.check_settings_violations()
                 all_violations = folder_violations + process_violations
 
                 if all_violations:
                     msg = json.dumps({"type": "ALERT", "violations": all_violations})
-                    self.status_signal.emit(f"⚠️ BLOQUEADO: {all_violations[0]}")
+                    self.status_signal.emit(f"⚠️ DETECTADO: {all_violations[0]}")
                 else:
                     msg = json.dumps({"type": "STATUS", "status": "CLEAN"})
-                    self.status_signal.emit("✅ Examen Seguro - Monitoreando")
+                    self.status_signal.emit("✅ Monitoreando...")
 
                 try: self.sock.sendall(msg.encode('utf-8'))
                 except: break 
@@ -138,11 +170,9 @@ class NetworkThread(QThread):
     def receive_loop(self):
         try:
             while self.running:
-                data = self.sock.recv(4096) # Buffer grande por si el examen es largo
+                data = self.sock.recv(10 * 1024 * 1024) 
                 if not data: break
                 
-                # A veces llegan mensajes pegados. Esto es básico, para texto muy largo se requiere un protocolo mejor
-                # pero para este MVP funcionará con textos razonables.
                 try:
                     msg = json.loads(data.decode('utf-8'))
                     
@@ -150,79 +180,71 @@ class NetworkThread(QThread):
                         allowed = msg.get('allowed_apps', [])
                         guard.update_config(allowed)
                     
-                    elif msg.get('type') == 'EXAM_CONTENT':
-                        # DISPARAMOS LA SEÑAL A LA UI
-                        title = msg.get('title', 'Examen')
-                        content = msg.get('content', '')
-                        self.exam_signal.emit(title, content)
+                    elif msg.get('type') == 'EXAM_FILE':
+                        filename = msg['filename']
+                        b64_data = msg['file_data']
+                        print(f"[CLIENTE] PDF Recibido: {filename}")
+                        
+                        file_bytes = base64.b64decode(b64_data)
+                        temp_dir = tempfile.gettempdir()
+                        file_path = os.path.join(temp_dir, filename)
+                        
+                        with open(file_path, "wb") as f:
+                            f.write(file_bytes)
+                        
+                        self.pdf_received.emit(file_path)
+
                 except: pass     
         except: pass
 
-# --- UI CLIENTE ---
 class StudentClient(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SCP - Examen Seguro")
-        self.resize(400, 550)
+        self.resize(800, 700) # Hacemos la ventana más grande para leer bien
         self.is_dark_mode = True 
         
-        # Referencia a la ventana de examen para que no se borre de memoria
-        self.exam_window = None
-
         self.layout = QVBoxLayout()
-        self.layout.setContentsMargins(25, 25, 25, 25)
-        self.layout.setSpacing(15)
+        self.layout.setContentsMargins(15, 15, 15, 15)
         self.setLayout(self.layout)
 
         # Top Bar
         top_bar = QHBoxLayout()
         top_bar.addStretch()
-        self.btn_theme = QPushButton("⚙️ Tema Oscuro")
+        self.btn_theme = QPushButton("⚙️ Tema")
         self.btn_theme.setObjectName("Config")
         self.btn_theme.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_theme.clicked.connect(self.toggle_theme)
-        self.btn_theme.setFixedWidth(150)
+        self.btn_theme.setFixedWidth(100)
         top_bar.addWidget(self.btn_theme)
         self.layout.addLayout(top_bar)
 
-        # Header
-        lbl_title = QLabel("SCP ExamGuard")
-        lbl_title.setObjectName("Title")
-        lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(lbl_title)
+        # Tabs
+        self.tabs = QTabWidget()
+        self.layout.addWidget(self.tabs)
+
+        # TAB 1: CONEXIÓN
+        self.tab_conn = QWidget()
+        self.setup_connection_tab()
+        self.tabs.addTab(self.tab_conn, "📡 Conexión")
+
+        # TAB 2: EXAMEN (Visor PDF)
+        self.tab_exam = QWidget()
+        self.layout_exam = QVBoxLayout()
+        self.tab_exam.setLayout(self.layout_exam)
         
-        self.lbl_subtitle = QLabel("Sistema de Control de Procesos")
-        self.lbl_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.lbl_subtitle)
-        self.layout.addSpacing(10)
+        # Etiqueta de estado
+        self.lbl_exam_status = QLabel("Esperando archivo del profesor...")
+        self.lbl_exam_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_exam_status.setStyleSheet("font-size: 16px; color: #6c7086; margin-bottom: 10px;")
+        self.layout_exam.addWidget(self.lbl_exam_status)
 
-        # Login Frame
-        self.frame_login = QFrame()
-        layout_login = QVBoxLayout()
-        layout_login.setContentsMargins(20, 25, 20, 25)
-        layout_login.setSpacing(15)
-        self.frame_login.setLayout(layout_login)
-        
-        self.input_name = QLineEdit()
-        self.input_name.setPlaceholderText("Nombre del Alumno")
-        layout_login.addWidget(self.input_name)
-        layout_login.addWidget(QLabel("Seleccionar Clase:"))
-        self.combo_servers = QComboBox()
-        self.combo_servers.addItem("Buscando profesores...")
-        layout_login.addWidget(self.combo_servers)
-        layout_login.addSpacing(10)
+        # --- AQUI ESTA EL VISOR INTEGRADO ---
+        self.pdf_viewer = PDFViewerWidget()
+        self.layout_exam.addWidget(self.pdf_viewer)
 
-        self.btn_connect = QPushButton("Ingresar al Examen")
-        self.btn_connect.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_connect.clicked.connect(self.start_exam)
-        layout_login.addWidget(self.btn_connect)
-        self.layout.addWidget(self.frame_login)
-
-        # Status
-        self.lbl_status = QLabel("Esperando conexión...")
-        self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.lbl_status)
-        self.layout.addStretch()
+        self.tabs.addTab(self.tab_exam, "📝 Examen")
+        self.tabs.setTabEnabled(1, False) 
 
         # Threads
         self.discovery = DiscoveryThread()
@@ -233,23 +255,48 @@ class StudentClient(QWidget):
 
         self.apply_theme()
 
+    def setup_connection_tab(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(20)
+        layout.setContentsMargins(100, 50, 100, 50) # Centrado bonito
+        self.tab_conn.setLayout(layout)
+
+        lbl_title = QLabel("SCP ExamGuard")
+        lbl_title.setObjectName("Title")
+        lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl_title)
+        
+        frame_login = QFrame()
+        l_login = QVBoxLayout()
+        frame_login.setLayout(l_login)
+        
+        self.input_name = QLineEdit()
+        self.input_name.setPlaceholderText("Nombre del Alumno")
+        l_login.addWidget(self.input_name)
+        
+        self.combo_servers = QComboBox()
+        self.combo_servers.addItem("Buscando profesores...")
+        l_login.addWidget(self.combo_servers)
+        
+        self.btn_connect = QPushButton("Ingresar al Examen")
+        self.btn_connect.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_connect.clicked.connect(self.start_exam)
+        l_login.addWidget(self.btn_connect)
+        
+        layout.addWidget(frame_login)
+        self.lbl_status = QLabel("Esperando conexión...")
+        self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.lbl_status)
+        layout.addStretch()
+
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
         self.apply_theme()
-        if self.exam_window and self.exam_window.isVisible():
-            self.exam_window.setStyleSheet(THEME_DARK if self.is_dark_mode else THEME_LIGHT)
 
     def apply_theme(self):
-        if self.is_dark_mode:
-            self.setStyleSheet(THEME_DARK)
-            self.btn_theme.setText("🌙 Modo Noche")
-            self.lbl_subtitle.setStyleSheet("color: #bac2de; font-size: 12px;")
-            if "Esperando" in self.lbl_status.text(): self.lbl_status.setStyleSheet("color: #6c7086;")
-        else:
-            self.setStyleSheet(THEME_LIGHT)
-            self.btn_theme.setText("☀️ Modo Día")
-            self.lbl_subtitle.setStyleSheet("color: #9ca0b0; font-size: 12px;")
-            if "Esperando" in self.lbl_status.text(): self.lbl_status.setStyleSheet("color: #9ca0b0;")
+        style = THEME_DARK if self.is_dark_mode else THEME_LIGHT
+        self.setStyleSheet(style)
+        self.btn_theme.setText("🌙" if self.is_dark_mode else "☀️")
         self.update_status_label(self.lbl_status.text())
 
     def add_server(self, name, ip):
@@ -269,35 +316,39 @@ class StudentClient(QWidget):
 
         self.input_name.setDisabled(True)
         self.combo_servers.setDisabled(True)
-        self.btn_connect.setText("🔒 EXAMEN EN CURSO")
+        self.btn_connect.setText("🔒 CONECTADO")
         self.btn_connect.setObjectName("Locked")
         self.btn_connect.setDisabled(True)
         self.style().unpolish(self.btn_connect)
         self.style().polish(self.btn_connect)
 
+        self.tabs.setTabEnabled(1, True)
+        self.tabs.setCurrentIndex(1)
+
         self.net_thread = NetworkThread(server_ip, name)
         self.net_thread.status_signal.connect(self.update_status_label)
-        
-        # CONECTAMOS LA SEÑAL DE EXAMEN A LA FUNCION QUE ABRE LA VENTANA
-        self.net_thread.exam_signal.connect(self.show_exam_popup)
-        
+        self.net_thread.pdf_received.connect(self.on_pdf_received)
         self.net_thread.start()
-
-    def show_exam_popup(self, title, content):
-        """Abre la ventana flotante con la consigna"""
-        self.exam_window = ExamWindow(title, content, self.is_dark_mode)
-        self.exam_window.show()
 
     def update_status_label(self, text):
         self.lbl_status.setText(text)
         if self.is_dark_mode: c = {"block": "#f38ba8", "safe": "#a6e3a1", "wait": "#6c7086"}
         else: c = {"block": "#d20f39", "safe": "#40a02b", "wait": "#9ca0b0"}
-
-        if "BLOQUEADO" in text: color = c["block"]
-        elif "Seguro" in text: color = c["safe"]
+        if "DETECTADO" in text: color = c["block"]
+        elif "Monitoreando" in text: color = c["safe"]
         else: color = c["wait"]
-        
         self.lbl_status.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 16px;")
+
+    def on_pdf_received(self, filepath):
+        filename = os.path.basename(filepath)
+        self.lbl_exam_status.setText(f"Viendo: {filename}")
+        self.lbl_exam_status.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 14px;")
+        
+        # --- CARGAMOS EL PDF EN EL VISOR ---
+        self.pdf_viewer.load_pdf(filepath)
+        
+        if self.tabs.currentIndex() != 1:
+            self.tabs.setTabText(1, "🔴 ¡EXAMEN LLEGÓ!")
 
     def closeEvent(self, event):
         if self.net_thread:
