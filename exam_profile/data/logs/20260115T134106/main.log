@@ -1,0 +1,3 @@
+2026-01-15 13:41:07.347 [info] update#setState disabled
+2026-01-15 13:41:07.347 [info] update#ctor - updates are disabled due to running as Admin in user setup
+2026-01-15 13:41:37.358 [info] Extension host with pid 7600 exited with code: 0, signal: unknown.

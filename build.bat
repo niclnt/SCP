@@ -35,7 +35,7 @@ if errorlevel 1 (
 echo Codigo encriptado correctamente.
 
 :: --- CORRECCION CRITICA: Agregamos "security" a los imports ocultos ---
-set HIDDEN_IMPORTS=--hidden-import=PyQt6 --hidden-import=PyQt6.QtCore --hidden-import=PyQt6.QtGui --hidden-import=PyQt6.QtWidgets --hidden-import=psutil --hidden-import=requests --hidden-import=json --hidden-import=socket --hidden-import=security --hidden-import=fitz
+set HIDDEN_IMPORTS=--hidden-import=PyQt6 --hidden-import=PyQt6.QtCore --hidden-import=PyQt6.QtGui --hidden-import=PyQt6.QtWidgets --hidden-import=psutil --hidden-import=requests --hidden-import=json --hidden-import=socket --hidden-import=security --hidden-import=fitz --hidden-import=uiautomation
 
 :: Ruta donde buscar los scripts ofuscados
 set PATHS_FLAG=--paths="obf_dist"

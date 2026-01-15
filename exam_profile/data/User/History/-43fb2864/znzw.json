@@ -1,0 +1,16 @@
+{
+    "chat.editor.enabled": false,
+    "chat.panel.enabled": false,
+    "chat.commandCenter.enabled": false,
+    "inlineChat.enabled": false,
+    "interactiveEditor.enabled": false,
+    "github.copilot.enable": {
+        "*": false
+    },
+    "git.enabled": false,
+    "workbench.startupEditor": "none",
+    "extensions.autoCheckUpdates": false,
+    "extensions.autoUpdate": false,
+    "workbench.sideBar.location": "left",
+    "window.zoomLevel": 0
+}

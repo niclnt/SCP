@@ -1,0 +1,118 @@
+{
+  "version": 3,
+  "responderUsername": "",
+  "initialLocation": "panel",
+  "requests": [
+    {
+      "requestId": "request_9f66788b-a0d0-40ae-80fa-16f9783dbe98",
+      "message": {
+        "parts": [
+          {
+            "range": {
+              "start": 0,
+              "endExclusive": 13
+            },
+            "editorRange": {
+              "startLineNumber": 1,
+              "startColumn": 1,
+              "endLineNumber": 1,
+              "endColumn": 14
+            },
+            "text": "hjkhjkhjkhkuj",
+            "kind": "text"
+          }
+        ],
+        "text": "hjkhjkhjkhkuj"
+      },
+      "variableData": {
+        "variables": []
+      },
+      "response": [
+        {
+          "kind": "mcpServersStarting",
+          "didStartServerIds": []
+        },
+        {
+          "value": "You need to set up GitHub Copilot and be signed in to use Chat.",
+          "isTrusted": false,
+          "supportThemeIcons": false,
+          "supportHtml": false,
+          "supportAlertSyntax": false
+        }
+      ],
+      "agent": {
+        "id": "setup.agent",
+        "name": "GitHub Copilot",
+        "isDefault": true,
+        "isCore": true,
+        "modes": [
+          "agent"
+        ],
+        "when": "config.chat.agent.enabled && !previewFeaturesDisabled",
+        "slashCommands": [],
+        "disambiguation": [],
+        "locations": [
+          "panel"
+        ],
+        "metadata": {
+          "helpTextPrefix": {
+            "value": "You need to set up GitHub Copilot and be signed in to use Chat.",
+            "isTrusted": false,
+            "supportThemeIcons": false,
+            "supportHtml": false,
+            "supportAlertSyntax": false
+          },
+          "themeIcon": {
+            "id": "tools"
+          }
+        },
+        "description": "Describe what to build next",
+        "extensionId": {
+          "value": "nullExtensionDescription",
+          "_lower": "nullextensiondescription"
+        },
+        "extensionDisplayName": "Null Extension Description",
+        "extensionPublisherId": "vscode"
+      },
+      "timestamp": 1768495277677,
+      "responseId": "response_11299da5-aae9-4ed9-8261-9b706753ee3b",
+      "result": {},
+      "responseMarkdownInfo": [],
+      "followups": [],
+      "modelState": {
+        "value": 1,
+        "completedAt": 1768495282681
+      },
+      "contentReferences": [],
+      "codeCitations": [],
+      "timeSpentWaiting": 0
+    }
+  ],
+  "sessionId": "3ea23bee-2dc6-415a-be27-38f99bcf4b0c",
+  "creationDate": 1768495268235,
+  "lastMessageDate": 1768495277677,
+  "hasPendingEdits": false,
+  "inputState": {
+    "contrib": {
+      "chatDynamicVariableModel": []
+    },
+    "attachments": [],
+    "mode": {
+      "id": "agent",
+      "kind": "agent"
+    },
+    "inputText": "",
+    "selections": [
+      {
+        "startLineNumber": 1,
+        "startColumn": 1,
+        "endLineNumber": 1,
+        "endColumn": 1,
+        "selectionStartLineNumber": 1,
+        "selectionStartColumn": 1,
+        "positionLineNumber": 1,
+        "positionColumn": 1
+      }
+    ]
+  }
+}

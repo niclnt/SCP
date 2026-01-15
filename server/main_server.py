@@ -5,14 +5,20 @@ import json
 import time
 import base64
 import os
+from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
                              QPushButton, QCheckBox, QFrame, QMessageBox, QAbstractItemView,
                              QTabWidget, QTextEdit, QFileDialog) 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 
-# --- 1. DEFINICIÓN DE TEMAS ---
+# --- CONFIGURACIÓN ---
+EVIDENCE_DIR = "evidence"
+if not os.path.exists(EVIDENCE_DIR):
+    os.makedirs(EVIDENCE_DIR)
+
+# --- TEMAS (TU DISEÑO ORIGINAL) ---
 THEME_DARK = """
 QMainWindow { background-color: #1e1e2e; }
 QWidget { font-family: 'Segoe UI', sans-serif; font-size: 14px; color: #cdd6f4; }
@@ -57,7 +63,6 @@ QLabel#Title { font-size: 20px; font-weight: bold; color: #fe640b; }
 QLabel#SubInfo { color: #9ca0b0; font-size: 12px; }
 """
 
-# --- UTILIDADES ---
 def get_lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -119,12 +124,10 @@ class ServerThread(threading.Thread):
         self._broadcast(msg)
 
     def broadcast_pdf(self, filepath):
-        """Lee el PDF, lo convierte a Base64 y lo envía"""
         try:
             filename = os.path.basename(filepath)
             filesize = os.path.getsize(filepath)
             
-            # Limite de seguridad: 10MB para no colgar el socket
             if filesize > 10 * 1024 * 1024:
                 return False, "El archivo es muy pesado (Max 10MB)"
 
@@ -136,7 +139,7 @@ class ServerThread(threading.Thread):
                 "filename": filename,
                 "file_data": encoded_data
             })
-            print(f"[SERVIDOR] Enviando PDF: {filename} ({filesize} bytes)")
+            print(f"[SERVIDOR] Enviando PDF: {filename}")
             self._broadcast(msg)
             return True, "Enviado correctamente"
         except Exception as e:
@@ -162,24 +165,50 @@ class ServerThread(threading.Thread):
             except: return False
         return False
 
+    def save_evidence(self, student_name, base64_img):
+        """Guarda la foto de evidencia en la carpeta"""
+        try:
+            timestamp = datetime.now().strftime("%H-%M-%S")
+            safe_name = "".join([c for c in student_name if c.isalpha() or c.isdigit() or c==' ']).strip()
+            filename = f"{safe_name}_{timestamp}.jpg"
+            filepath = os.path.join(EVIDENCE_DIR, filename)
+            
+            img_data = base64.b64decode(base64_img)
+            with open(filepath, "wb") as f:
+                f.write(img_data)
+            print(f"📸 FOTO GUARDADA: {filepath}")
+        except Exception as e:
+            print(f"Error guardando foto: {e}")
+
     def handle_client(self, client_sock, addr):
         ip = addr[0]
         hostname = "Desconocido"
         try:
             while True:
-                data = client_sock.recv(4096)
+                # Buffer más grande para recibir imágenes
+                data = client_sock.recv(1048576)
                 if not data: break
-                msg = json.loads(data.decode('utf-8'))
                 
-                if msg['type'] == 'REGISTER':
-                    hostname = msg['hostname']
-                    self.clients_map[hostname] = client_sock
-                    self.update_callback(hostname, ip, "🟢 Conectado")
-                elif msg['type'] == 'ALERT':
-                    violations = ", ".join(msg['violations'])
-                    self.update_callback(hostname, ip, f"🔴 ALERT: {violations}")
-                elif msg['type'] == 'STATUS' and msg.get('status') == 'CLEAN':
-                    self.update_callback(hostname, ip, "🟢 Seguro")
+                try: 
+                    msg = json.loads(data.decode('utf-8'))
+                    
+                    if msg['type'] == 'REGISTER':
+                        hostname = msg['hostname']
+                        self.clients_map[hostname] = client_sock
+                        self.update_callback(hostname, ip, "🟢 Conectado")
+                    
+                    elif msg['type'] == 'ALERT':
+                        violations = ", ".join(msg['violations'])
+                        self.update_callback(hostname, ip, f"🔴 ALERT: {violations}")
+                        
+                        # GUARDAR FOTO SI EXISTE
+                        if 'screenshot' in msg:
+                            self.save_evidence(hostname, msg['screenshot'])
+                            
+                    elif msg['type'] == 'STATUS' and msg.get('status') == 'CLEAN':
+                        self.update_callback(hostname, ip, "🟢 Seguro")
+                except json.JSONDecodeError: pass
+
         except: pass
         finally:
             self.update_callback(hostname, ip, "⚪ Desconectado")
@@ -187,7 +216,7 @@ class ServerThread(threading.Thread):
                 del self.clients_map[hostname]
             client_sock.close()
 
-# --- INTERFAZ GRÁFICA ---
+# --- INTERFAZ GRÁFICA (SIN CAMBIOS, SOLO LÓGICA) ---
 class TeacherDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -311,7 +340,6 @@ class TeacherDashboard(QMainWindow):
         lbl_exam_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tab_exam_layout.addWidget(lbl_exam_title)
 
-        # Zona de carga
         self.lbl_file_status = QLabel("Ningún archivo seleccionado")
         self.lbl_file_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_file_status.setStyleSheet("color: #6c7086; font-size: 14px;")
@@ -322,7 +350,6 @@ class TeacherDashboard(QMainWindow):
         btn_select_file.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_select_file.clicked.connect(self.select_pdf)
         
-        # Centramos el botón
         h_layout_btn = QHBoxLayout()
         h_layout_btn.addStretch()
         h_layout_btn.addWidget(btn_select_file)
@@ -334,8 +361,8 @@ class TeacherDashboard(QMainWindow):
         self.btn_send_pdf = QPushButton("📤 ENVIAR PDF A ALUMNOS")
         self.btn_send_pdf.setFixedHeight(60)
         self.btn_send_pdf.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_send_pdf.setEnabled(False) # Deshabilitado hasta que seleccione algo
-        self.btn_send_pdf.setStyleSheet("background-color: #313244; color: #6c7086;") # Estilo deshabilitado
+        self.btn_send_pdf.setEnabled(False) 
+        self.btn_send_pdf.setStyleSheet("background-color: #313244; color: #6c7086;") 
         self.btn_send_pdf.clicked.connect(self.send_pdf_broadcast)
         tab_exam_layout.addWidget(self.btn_send_pdf)
         
@@ -343,9 +370,6 @@ class TeacherDashboard(QMainWindow):
 
         self.tabs.addTab(self.tab_exam, "📝 Consigna PDF")
         
-        self.tab_chat = QWidget()
-        self.tabs.addTab(self.tab_chat, "💬 Chat")
-
         self.apply_theme()
 
     def select_pdf(self):
@@ -356,7 +380,6 @@ class TeacherDashboard(QMainWindow):
             self.lbl_file_status.setText(f"✅ Archivo listo: {filename}")
             self.lbl_file_status.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 16px;")
             
-            # Habilitar botón de enviar
             self.btn_send_pdf.setEnabled(True)
             self.btn_send_pdf.setText(f"📤 ENVIAR '{filename}' AHORA")
             self.btn_send_pdf.setStyleSheet("background-color: #fab387; color: #1e1e2e; font-size: 16px; font-weight: bold;")

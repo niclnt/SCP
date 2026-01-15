@@ -1,106 +1,132 @@
 import psutil
 import os
-import shutil
+import subprocess
+import json
+import time
 
 class SecurityGuard:
     def __init__(self):
-        # Lista negra (Solo para avisar, NO para matar)
+        # LISTA NEGRA: Procesos que no queremos ver durante el examen
         self.forbidden_processes = [
-            "chrome.exe", "firefox.exe", "msedge.exe", "opera.exe", 
-            "discord.exe", "chatgpt.exe"
+            "chrome.exe", 
+            "firefox.exe", 
+            "msedge.exe", 
+            "opera.exe", 
+            "brave.exe",
+            "discord.exe", 
+            "chatgpt.exe",
+            "whatsapp.exe",
+            "telegram.exe"
         ]
-        
-        # Lista de IAs (Para sabotear y matar VS Code)
-        self.ai_extensions = [
-            "github.copilot", "blackbox", "tabnine", 
-            "codeium", "continue", "cursor"
-        ]
-        
-        self.allowed_apps = [] 
+        self.allowed_apps = []
 
     def update_config(self, allowed_list):
+        """Permite al profesor autorizar apps temporalmente (ej: calculadora)"""
         self.allowed_apps = [app.lower() for app in allowed_list]
 
-    def get_extensions_paths(self):
-        """Busca en más ubicaciones posibles de extensiones"""
-        paths = []
-        user_profile = os.environ.get('USERPROFILE')
+    # --- 1. DETECTOR DE PROCESOS (LO QUE FALTABA) ---
+    def get_running_violations(self):
+        """
+        Escanea todos los procesos de Windows.
+        Devuelve una lista con los nombres de los procesos prohibidos encontrados.
+        """
+        found = []
+        try:
+            # Iteramos sobre todos los procesos corriendo
+            for proc in psutil.process_iter(['name']):
+                try:
+                    p_name = proc.info['name']
+                    if not p_name: continue
+                    
+                    p_name_lower = p_name.lower()
+                    
+                    # 1. Si está en la lista de PERMITIDOS, lo ignoramos
+                    if p_name_lower in self.allowed_apps: 
+                        continue
+
+                    # 2. Si está en la lista de PROHIBIDOS, lo anotamos
+                    if p_name_lower in self.forbidden_processes:
+                        # Evitamos duplicados en el reporte
+                        if p_name not in found:
+                            found.append(p_name)
+                            
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+        except Exception as e:
+            print(f"Error escaneando procesos: {e}")
         
-        # Ruta 1: Carpeta estándar .vscode
-        paths.append(os.path.join(user_profile, '.vscode', 'extensions'))
-        
-        # Ruta 2: AppData (A veces Cursor o versiones portables las guardan aqui)
-        appdata = os.environ.get('APPDATA')
-        paths.append(os.path.join(appdata, 'Code', 'User', 'globalStorage'))
-        
-        return paths
+        return found
+
+    # --- 2. BLOQUEO DE VS CODE (ESTRATEGIA BUM) ---
+    def enforce_exam_settings(self):
+        """
+        Aplica los ajustes para apagar la IA y encender la accesibilidad (para el espía).
+        """
+        try:
+            appdata = os.environ.get('APPDATA')
+            if not appdata: return False
+            
+            settings_path = os.path.join(appdata, 'Code', 'User', 'settings.json')
+            os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+            
+            data = {}
+            if os.path.exists(settings_path):
+                try:
+                    with open(settings_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except: data = {}
+
+            # REGLAS DE SEGURIDAD
+            security_rules = {
+                # Apagar IA
+                "chat.editor.enabled": False,
+                "chat.panel.enabled": False,
+                "chat.commandCenter.enabled": False,
+                "inlineChat.enabled": False,
+                "interactiveEditor.enabled": False,
+                "github.copilot.enable": {"*": False},
+                "github.copilot.editor.enable": False,
+                
+                # ENCENDER ACCESIBILIDAD (Vital para watcher.py)
+                "editor.accessibilitySupport": "on",
+                
+                # Limpieza visual
+                "workbench.tips.enabled": False,
+            }
+
+            changes = False
+            for k, v in security_rules.items():
+                if data.get(k) != v:
+                    data[k] = v
+                    changes = True
+            
+            if changes:
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=4)
+                print("[CONFIG] Ajustes de seguridad aplicados en VS Code.")
+                return True
+            return False
+
+        except Exception as e:
+            print(f"[ERROR CONFIG] {e}")
+            return False
 
     def kill_vscode_processes(self):
-        """Mata SOLO VS Code (Se usa solo si se detecta IA)"""
-        targets = ["Code.exe", "code.exe", "cursor.exe"]
-        for target in targets:
-            try:
-                os.system(f"taskkill /F /IM {target} /T >nul 2>&1")
-            except: pass
+        """Reinicia VS Code para aplicar cambios"""
+        try:
+            subprocess.run("taskkill /F /IM Code.exe /T", shell=True, stderr=subprocess.DEVNULL)
+        except: pass
 
     def sabotage_ai_extensions(self):
-        """
-        Escanea carpetas. 
-        Retorna True SOLO si encontró una IA viva y la bloqueó.
-        """
-        changes_made = False
-        extension_dirs = self.get_extensions_paths()
+        """Función principal que llama el cliente al iniciar"""
+        if self.enforce_exam_settings():
+            self.kill_vscode_processes() 
+            return True
+        return False
 
-        for base_path in extension_dirs:
-            if not os.path.exists(base_path): continue
-            try:
-                folders = os.listdir(base_path)
-                for folder in folders:
-                    folder_lower = folder.lower()
-                    full_path = os.path.join(base_path, folder)
+    # Stubs para compatibilidad si alguna vez se llaman
+    def check_settings_violations(self): return []
+    def force_delete_handler(self, a, b, c): pass
 
-                    if folder_lower.endswith(".bloqueado"): continue
-
-                    is_ai = any(key in folder_lower for key in self.ai_extensions)
-                    
-                    if is_ai:
-                        new_path = full_path + ".BLOQUEADO"
-                        try:
-                            os.rename(full_path, new_path)
-                            changes_made = True 
-                            print(f"[SEGURIDAD] IA Bloqueada: {folder}")
-                        except: pass
-            except: pass
-        
-        return changes_made
-
-    def get_running_violations(self):
-        """Devuelve procesos prohibidos activos (SOLO PARA INFORMAR)"""
-        found = []
-        for proc in psutil.process_iter(['name']):
-            try:
-                p_name = proc.info['name']
-                if not p_name: continue
-                p_name_lower = p_name.lower()
-
-                if p_name_lower in self.allowed_apps: continue
-
-                if p_name_lower in self.forbidden_processes:
-                    found.append(p_name)
-            except: pass
-        return list(set(found))
-
-    def check_settings_violations(self):
-        extension_dirs = self.get_extensions_paths()
-        violations = []
-        for base_path in extension_dirs:
-            if not os.path.exists(base_path): continue
-            try:
-                folders = os.listdir(base_path)
-                for folder in folders:
-                    if any(k in folder.lower() for k in self.ai_extensions) and not folder.endswith(".BLOQUEADO"):
-                        violations.append(f"IA Activa: {folder}")
-            except: pass
-        return violations
-
+# Instancia global
 guard = SecurityGuard()

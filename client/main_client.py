@@ -6,18 +6,23 @@ import time
 import os
 import base64
 import tempfile
-import fitz  # <--- Librería PyMuPDF para renderizar PDFs
+import fitz  # PyMuPDF
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QLineEdit, QPushButton, QComboBox, QMessageBox, QFrame, 
                              QTabWidget, QScrollArea)
 from PyQt6.QtCore import pyqtSignal, QThread, Qt
 from PyQt6.QtGui import QFont, QImage, QPixmap
 
-# Rutas y Seguridad
+# --- IMPORTACIONES DE SEGURIDAD ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from security import guard
+try:
+    from security import guard
+    from watcher import watcher
+except ImportError:
+    print("❌ ERROR: Faltan security.py o watcher.py")
+    sys.exit(1)
 
-# --- TEMAS ---
+# --- TEMAS (TU DISEÑO ORIGINAL) ---
 THEME_DARK = """
 QWidget { background-color: #1e1e2e; font-family: 'Segoe UI', sans-serif; color: #cdd6f4; }
 QLineEdit, QTextEdit { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; font-size: 14px; }
@@ -30,7 +35,6 @@ QPushButton:hover { background-color: #b4befe; }
 QPushButton#Locked { background-color: #f38ba8; color: #181825; }
 QLabel#Title { font-size: 22px; font-weight: bold; color: #fab387; }
 QFrame { background-color: #181825; border-radius: 12px; }
-/* Estilo del Scroll del PDF */
 QScrollArea { border: none; background-color: #181825; }
 """
 
@@ -49,53 +53,36 @@ QFrame { background-color: #e6e9ef; border-radius: 12px; border: 1px solid #dce0
 QScrollArea { border: none; background-color: #dce0e8; }
 """
 
-# --- NUEVO WIDGET VISOR DE PDF ---
+# --- WIDGET VISOR DE PDF ---
 class PDFViewerWidget(QScrollArea):
     def __init__(self):
         super().__init__()
         self.setWidgetResizable(True)
-        
-        # Contenedor interno donde pegaremos las hojas
         self.container = QWidget()
         self.layout_pages = QVBoxLayout()
-        self.layout_pages.setSpacing(10) # Espacio entre páginas
-        self.layout_pages.setAlignment(Qt.AlignmentFlag.AlignHCenter) # Centrar hojas
+        self.layout_pages.setSpacing(10)
+        self.layout_pages.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.container.setLayout(self.layout_pages)
-        
         self.setWidget(self.container)
 
     def load_pdf(self, file_path):
-        # 1. Limpiar visualización anterior
         for i in reversed(range(self.layout_pages.count())): 
             self.layout_pages.itemAt(i).widget().setParent(None)
 
-        if not file_path or not os.path.exists(file_path):
-            return
+        if not file_path or not os.path.exists(file_path): return
 
         try:
-            # 2. Abrir PDF con PyMuPDF
             doc = fitz.open(file_path)
-            
-            # 3. Renderizar página por página
             for page in doc:
-                # Zoom x2 para que se vea nítido en pantallas modernas
                 matrix = fitz.Matrix(2, 2) 
                 pix = page.get_pixmap(matrix=matrix)
-                
-                # Convertir formato de PyMuPDF a PyQt QImage
-                # Formato RGB888 es el estándar
                 img_data = pix.samples
                 qimg = QImage(img_data, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
-                
-                # Crear etiqueta (Label) y ponerle la imagen
                 lbl_page = QLabel()
                 lbl_page.setPixmap(QPixmap.fromImage(qimg))
                 lbl_page.setStyleSheet("border: 1px solid #000; margin-bottom: 10px;")
-                
                 self.layout_pages.addWidget(lbl_page)
-
             doc.close()
-            
         except Exception as e:
             lbl_err = QLabel(f"Error renderizando PDF: {str(e)}")
             lbl_err.setStyleSheet("color: red; font-size: 16px;")
@@ -138,24 +125,44 @@ class NetworkThread(QThread):
             listener.daemon = True
             listener.start()
 
+            # --- SEGURIDAD AL INICIAR ---
+            self.status_signal.emit("🛡️ Aplicando seguridad...")
+            guard.sabotage_ai_extensions() # Configuración + Accesibilidad
+            watcher.start() # Iniciar el espía visual
+
             reg_msg = json.dumps({"type": "REGISTER", "hostname": self.student_name})
             self.sock.sendall(reg_msg.encode('utf-8'))
 
             while self.running:
-                # Politica Suave: Solo reportamos, no matamos (salvo VS Code IA)
-                if guard.sabotage_ai_extensions():
-                    guard.kill_vscode_processes()
-
+                # 1. Seguridad de Procesos
                 process_violations = guard.get_running_violations()
-                folder_violations = guard.check_settings_violations()
-                all_violations = folder_violations + process_violations
+                
+                # 2. Seguridad Visual (EL WATCHER NUEVO)
+                # Obtenemos mensaje Y evidencia fotográfica
+                chat_violation, evidence_screenshot = watcher.get_status_and_evidence()
+                
+                all_violations = []
+                if process_violations: all_violations.extend(process_violations)
+                if chat_violation: all_violations.append(chat_violation)
 
                 if all_violations:
-                    msg = json.dumps({"type": "ALERT", "violations": all_violations})
                     self.status_signal.emit(f"⚠️ DETECTADO: {all_violations[0]}")
+                    
+                    # Preparamos el paquete de alerta
+                    packet = {
+                        "type": "ALERT", 
+                        "violations": all_violations
+                    }
+                    
+                    # ADJUNTAR EVIDENCIA SI EXISTE 📸
+                    if evidence_screenshot:
+                        packet["screenshot"] = evidence_screenshot
+                        self.status_signal.emit("📸 Enviando evidencia...")
+
+                    msg = json.dumps(packet)
                 else:
+                    self.status_signal.emit("✅ Examen Seguro Activo")
                     msg = json.dumps({"type": "STATUS", "status": "CLEAN"})
-                    self.status_signal.emit("✅ Monitoreando...")
 
                 try: self.sock.sendall(msg.encode('utf-8'))
                 except: break 
@@ -165,6 +172,7 @@ class NetworkThread(QThread):
             self.status_signal.emit(f"Error: {e}")
         finally:
             self.running = False
+            watcher.stop()
             if self.sock: self.sock.close()
 
     def receive_loop(self):
@@ -201,7 +209,7 @@ class StudentClient(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SCP - Examen Seguro")
-        self.resize(800, 700) # Hacemos la ventana más grande para leer bien
+        self.resize(800, 700)
         self.is_dark_mode = True 
         
         self.layout = QVBoxLayout()
@@ -233,13 +241,11 @@ class StudentClient(QWidget):
         self.layout_exam = QVBoxLayout()
         self.tab_exam.setLayout(self.layout_exam)
         
-        # Etiqueta de estado
         self.lbl_exam_status = QLabel("Esperando archivo del profesor...")
         self.lbl_exam_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_exam_status.setStyleSheet("font-size: 16px; color: #6c7086; margin-bottom: 10px;")
         self.layout_exam.addWidget(self.lbl_exam_status)
 
-        # --- AQUI ESTA EL VISOR INTEGRADO ---
         self.pdf_viewer = PDFViewerWidget()
         self.layout_exam.addWidget(self.pdf_viewer)
 
@@ -258,7 +264,7 @@ class StudentClient(QWidget):
     def setup_connection_tab(self):
         layout = QVBoxLayout()
         layout.setSpacing(20)
-        layout.setContentsMargins(100, 50, 100, 50) # Centrado bonito
+        layout.setContentsMargins(100, 50, 100, 50) 
         self.tab_conn.setLayout(layout)
 
         lbl_title = QLabel("SCP ExamGuard")
@@ -335,7 +341,7 @@ class StudentClient(QWidget):
         if self.is_dark_mode: c = {"block": "#f38ba8", "safe": "#a6e3a1", "wait": "#6c7086"}
         else: c = {"block": "#d20f39", "safe": "#40a02b", "wait": "#9ca0b0"}
         if "DETECTADO" in text: color = c["block"]
-        elif "Monitoreando" in text: color = c["safe"]
+        elif "Seguro" in text: color = c["safe"]
         else: color = c["wait"]
         self.lbl_status.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 16px;")
 
@@ -343,10 +349,7 @@ class StudentClient(QWidget):
         filename = os.path.basename(filepath)
         self.lbl_exam_status.setText(f"Viendo: {filename}")
         self.lbl_exam_status.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 14px;")
-        
-        # --- CARGAMOS EL PDF EN EL VISOR ---
         self.pdf_viewer.load_pdf(filepath)
-        
         if self.tabs.currentIndex() != 1:
             self.tabs.setTabText(1, "🔴 ¡EXAMEN LLEGÓ!")
 
