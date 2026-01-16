@@ -9,6 +9,10 @@ import base64
 THREAT_KEYWORDS = [
     "Github Copilot", 
     "Ask Copilot",
+    "Ask about your code",
+    "Generate Agent Instrutions to onboard AI onto your codebase",
+    "AI responses",
+    "Explore and understand your code",
     "Inline Chat",
     "Chat Panel",       # VS Code nombra así al panel contenedor
     "ChatView",         # Nombre técnico interno

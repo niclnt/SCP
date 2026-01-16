@@ -6,62 +6,64 @@ import time
 
 class SecurityGuard:
     def __init__(self):
-        # LISTA NEGRA: Procesos que no queremos ver durante el examen
         self.forbidden_processes = [
-            "chrome.exe", 
-            "firefox.exe", 
-            "msedge.exe", 
-            "opera.exe", 
-            "brave.exe",
-            "discord.exe", 
-            "chatgpt.exe",
-            "whatsapp.exe",
-            "telegram.exe"
+            "chrome.exe", "firefox.exe", "msedge.exe", "opera.exe", "brave.exe",
+            "discord.exe", "chatgpt.exe", "whatsapp.exe", "telegram.exe"
         ]
         self.allowed_apps = []
 
     def update_config(self, allowed_list):
-        """Permite al profesor autorizar apps temporalmente (ej: calculadora)"""
         self.allowed_apps = [app.lower() for app in allowed_list]
 
-    # --- 1. DETECTOR DE PROCESOS (LO QUE FALTABA) ---
-    def get_running_violations(self):
-        """
-        Escanea todos los procesos de Windows.
-        Devuelve una lista con los nombres de los procesos prohibidos encontrados.
-        """
-        found = []
+    # --- NUEVO: DETECTOR DE EXTENSIONES INSTALADAS ---
+    def check_installed_extensions(self):
+        """Revisa la carpeta física de extensiones en busca de IAs."""
+        violations = []
         try:
-            # Iteramos sobre todos los procesos corriendo
+            # Ruta estándar de extensiones de VS Code
+            home = os.path.expanduser("~")
+            ext_dir = os.path.join(home, ".vscode", "extensions")
+            
+            if not os.path.exists(ext_dir): return []
+
+            # Palabras que no pueden estar en los nombres de carpetas
+            keywords = ["copilot", "blackbox", "codeium", "chatgpt", "tabnine", "ai-chat"]
+
+            for folder_name in os.listdir(ext_dir):
+                folder_lower = folder_name.lower()
+                for kw in keywords:
+                    # Buscamos coincidencias
+                    if kw in folder_lower:
+                        # Ignoramos si es un falso positivo (ej: un tema de colores)
+                        # pero "copilot" suele ser culpable siempre.
+                        violations.append(f"Extensión Prohibida: {folder_name}")
+                        break
+        except Exception: pass
+        return list(set(violations))
+
+    def get_running_violations(self):
+        found = []
+        # 1. Chequeo de Procesos
+        try:
             for proc in psutil.process_iter(['name']):
                 try:
                     p_name = proc.info['name']
                     if not p_name: continue
-                    
-                    p_name_lower = p_name.lower()
-                    
-                    # 1. Si está en la lista de PERMITIDOS, lo ignoramos
-                    if p_name_lower in self.allowed_apps: 
-                        continue
-
-                    # 2. Si está en la lista de PROHIBIDOS, lo anotamos
-                    if p_name_lower in self.forbidden_processes:
-                        # Evitamos duplicados en el reporte
-                        if p_name not in found:
-                            found.append(p_name)
-                            
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
-        except Exception as e:
-            print(f"Error escaneando procesos: {e}")
+                    if p_name.lower() in self.allowed_apps: continue
+                    if p_name.lower() in self.forbidden_processes: 
+                        if p_name not in found: found.append(p_name)
+                except: pass
+        except: pass
+        
+        # 2. Chequeo de Extensiones (NUEVO)
+        # Esto detecta si instalaron Copilot aunque no abran el chat
+        ext_violations = self.check_installed_extensions()
+        found.extend(ext_violations)
         
         return found
 
-    # --- 2. BLOQUEO DE VS CODE (ESTRATEGIA BUM) ---
     def enforce_exam_settings(self):
-        """
-        Aplica los ajustes para apagar la IA y encender la accesibilidad (para el espía).
-        """
+        """Aplica el bloqueo maestro y la accesibilidad."""
         try:
             appdata = os.environ.get('APPDATA')
             if not appdata: return False
@@ -76,57 +78,40 @@ class SecurityGuard:
                         data = json.load(f)
                 except: data = {}
 
-            # REGLAS DE SEGURIDAD
             security_rules = {
-                # Apagar IA
+                "chat.disableAIFeatures": True, 
+                "github.copilot.enable": {"*": False},
                 "chat.editor.enabled": False,
                 "chat.panel.enabled": False,
-                "chat.commandCenter.enabled": False,
-                "inlineChat.enabled": False,
-                "interactiveEditor.enabled": False,
-                "github.copilot.enable": {"*": False},
-                "github.copilot.editor.enable": False,
-                
-                # ENCENDER ACCESIBILIDAD (Vital para watcher.py)
                 "editor.accessibilitySupport": "on",
-                
-                # Limpieza visual
-                "workbench.tips.enabled": False,
+                "workbench.tips.enabled": False
             }
 
             changes = False
-            for k, v in security_rules.items():
-                if data.get(k) != v:
-                    data[k] = v
+            for key, val in security_rules.items():
+                if data.get(key) != val:
+                    data[key] = val
                     changes = True
             
             if changes:
                 with open(settings_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=4)
-                print("[CONFIG] Ajustes de seguridad aplicados en VS Code.")
-                return True
+                return True # Hubo cambios
             return False
 
-        except Exception as e:
-            print(f"[ERROR CONFIG] {e}")
-            return False
+        except: return False
 
     def kill_vscode_processes(self):
-        """Reinicia VS Code para aplicar cambios"""
         try:
             subprocess.run("taskkill /F /IM Code.exe /T", shell=True, stderr=subprocess.DEVNULL)
         except: pass
 
     def sabotage_ai_extensions(self):
-        """Función principal que llama el cliente al iniciar"""
         if self.enforce_exam_settings():
+            # Solo matamos el proceso si hubo cambios importantes al inicio
             self.kill_vscode_processes() 
             return True
         return False
-
-    # Stubs para compatibilidad si alguna vez se llaman
-    def check_settings_violations(self): return []
-    def force_delete_handler(self, a, b, c): pass
 
 # Instancia global
 guard = SecurityGuard()

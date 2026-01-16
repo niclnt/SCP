@@ -145,28 +145,52 @@ class NetworkThread(QThread):
 
             while self.running:
                 current_time = time.time()
+                #refuerzo configuracion(evito reactivacion)
+                guard.enforce_exam_settings()
+
+                #escaneo
                 process_violations = guard.get_running_violations()
                 chat_violation, evidence_screenshot = watcher.get_status_and_evidence()
-
+               
                 all_violations = []
                 if process_violations: all_violations.extend(process_violations)
                 if chat_violation: all_violations.append(chat_violation)
 
+                # 3. LÓGICA DE ENVÍO Y UI
                 if all_violations:
+                    # --- CASO A: HAY TRAMPA (ROJO) ---
                     self.status_signal.emit(f"⚠️ DETECTADO: {all_violations[0]}")
+                    
                     packet = {"type": "ALERT", "violations": all_violations}
                     if evidence_screenshot:
                         packet["screenshot"] = evidence_screenshot
                         self.status_signal.emit("📸 Enviando evidencia...")
-                    self.sock.sendall(json.dumps(packet).encode('utf-8'))
+                    
+                    try: self.sock.sendall(json.dumps(packet).encode('utf-8'))
+                    except: break
 
                 elif (current_time - last_monitor_time) > MONITOR_INTERVAL:
+                    # --- CASO B: RUTINA (VERDE) ---
                     self.status_signal.emit("📡 Chequeo rutina...")
                     routine_screenshot = watcher.take_evidence_screenshot()
                     packet = {"type": "MONITOR", "status": "ROUTINE_CHECK", "screenshot": routine_screenshot}
-                    self.sock.sendall(json.dumps(packet).encode('utf-8'))
+                    
+                    try: self.sock.sendall(json.dumps(packet).encode('utf-8'))
+                    except: break
+                    
                     last_monitor_time = current_time
+                    # Importante: Volver a verde después de enviar la foto
                     self.status_signal.emit("✅ Examen Seguro Activo")
+
+                else:
+                    # --- CASO C: TODO LIMPIO (VERDE INMEDIATO) ---
+                    # AQUÍ ESTABA FALTANDO LA ACTUALIZACIÓN VISUAL
+                    self.status_signal.emit("✅ Examen Seguro Activo") 
+                    
+                    # Enviamos un latido simple al servidor para decir "sigo vivo y limpio"
+                    packet = {"type": "STATUS", "status": "CLEAN"}
+                    try: self.sock.sendall(json.dumps(packet).encode('utf-8'))
+                    except: pass
 
                 time.sleep(2)
 
