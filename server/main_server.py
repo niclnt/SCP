@@ -13,6 +13,22 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 
+# --- IMPORTACIONES PARA OCR (VISIÓN ARTIFICIAL) ---
+try:
+    import pytesseract
+    from PIL import Image
+    import io
+    # RUTA A TESSERACT: Ajusta esto si lo instalaste en otra carpeta
+    # Si está en el PATH de Windows, puedes comentar esta línea.
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    OCR_AVAILABLE = True
+except ImportError:
+    print("⚠️ 'pytesseract' o 'pillow' no instalados. El servidor guardará fotos pero no leerá texto.")
+    OCR_AVAILABLE = False
+except Exception:
+    print("⚠️ Tesseract.exe no encontrado en la ruta por defecto.")
+    OCR_AVAILABLE = False
+
 # --- CONFIGURACIÓN ---
 EVIDENCE_DIR = "evidence"
 if not os.path.exists(EVIDENCE_DIR):
@@ -165,28 +181,76 @@ class ServerThread(threading.Thread):
             except: return False
         return False
 
-    def save_evidence(self, student_name, base64_img):
-        """Guarda la foto de evidencia en la carpeta"""
+    # --- NUEVA FUNCIÓN: ANÁLISIS DE CAPTURAS ---
+    def analyze_screenshot(self, student_name, base64_img, is_alert=False):
+        """
+        1. Guarda la imagen en evidence/NombreAlumno/.
+        2. Si OCR está disponible, lee el texto.
+        3. Si encuentra frases de IA, devuelve una violación.
+        """
         try:
+            # 1. Preparar rutas
             timestamp = datetime.now().strftime("%H-%M-%S")
+            prefix = "ALERT" if is_alert else "MONITOR"
             safe_name = "".join([c for c in student_name if c.isalpha() or c.isdigit() or c==' ']).strip()
-            filename = f"{safe_name}_{timestamp}.jpg"
-            filepath = os.path.join(EVIDENCE_DIR, filename)
             
-            img_data = base64.b64decode(base64_img)
-            with open(filepath, "wb") as f:
-                f.write(img_data)
-            print(f"📸 FOTO GUARDADA: {filepath}")
+            # Carpeta individual por alumno
+            student_dir = os.path.join(EVIDENCE_DIR, safe_name)
+            if not os.path.exists(student_dir): os.makedirs(student_dir)
+            
+            filename = f"{prefix}_{timestamp}.jpg"
+            filepath = os.path.join(student_dir, filename)
+            
+            # 2. Guardar Imagen
+            img_bytes = base64.b64decode(base64_img)
+            
+            # Usamos PIL si está disponible, sino escritura binaria simple
+            if OCR_AVAILABLE:
+                image = Image.open(io.BytesIO(img_bytes))
+                image.save(filepath)
+            else:
+                with open(filepath, "wb") as f:
+                    f.write(img_bytes)
+            
+            # 3. Análisis OCR (Solo si tenemos Tesseract)
+            detected_violation = None
+            
+            if OCR_AVAILABLE:
+                # Convertimos imagen a texto
+                text_content = pytesseract.image_to_string(image).lower()
+                
+                # LISTA SEGURA: Frases exclusivas de la Interfaz de IA
+                keywords = [
+                    "ask copilot", 
+                    "build with agent", 
+                    "generate agent instructions",
+                    "/fix", 
+                    "/explain", 
+                    "github copilot",
+                    "ask about your code",
+                    "inline chat",
+                    "welcome to chat"
+                ]
+                
+                for kw in keywords:
+                    if kw in text_content:
+                        detected_violation = f"SERVIDOR DETECTÓ: UI de IA ('{kw}')"
+                        print(f"🚨 {safe_name}: OCR encontró '{kw}' en captura.")
+                        break
+            
+            return filepath, detected_violation
+
         except Exception as e:
-            print(f"Error guardando foto: {e}")
+            print(f"Error analizando foto: {e}")
+            return None, None
 
     def handle_client(self, client_sock, addr):
         ip = addr[0]
         hostname = "Desconocido"
         try:
             while True:
-                # Buffer más grande para recibir imágenes
-                data = client_sock.recv(1048576)
+                # Buffer más grande para recibir imágenes (2MB)
+                data = client_sock.recv(2 * 1024 * 1024)
                 if not data: break
                 
                 try: 
@@ -197,16 +261,33 @@ class ServerThread(threading.Thread):
                         self.clients_map[hostname] = client_sock
                         self.update_callback(hostname, ip, "🟢 Conectado")
                     
+                    # --- CASO 1: EL CLIENTE REPORTA ALERTA ---
                     elif msg['type'] == 'ALERT':
                         violations = ", ".join(msg['violations'])
-                        self.update_callback(hostname, ip, f"🔴 ALERT: {violations}")
+                        self.update_callback(hostname, ip, f"🔴 ALERTA: {violations}")
                         
-                        # GUARDAR FOTO SI EXISTE
+                        # Guardamos evidencia si viene
                         if 'screenshot' in msg:
-                            self.save_evidence(hostname, msg['screenshot'])
+                            self.analyze_screenshot(hostname, msg['screenshot'], is_alert=True)
                             
+                    # --- CASO 2: REPORTE DE RUTINA (MONITOREO) ---
+                    elif msg['type'] == 'MONITOR':
+                        screenshot_b64 = msg.get('screenshot')
+                        if screenshot_b64:
+                            # El servidor analiza la foto buscando lo que el cliente quizás no vio
+                            path, violation = self.analyze_screenshot(hostname, screenshot_b64, is_alert=False)
+                            
+                            if violation:
+                                # El OCR atrapó al alumno
+                                self.update_callback(hostname, ip, f"🔴 {violation}")
+                            else:
+                                # Todo limpio
+                                self.update_callback(hostname, ip, f"🟢 Monitoreado ({datetime.now().strftime('%H:%M')})")
+
                     elif msg['type'] == 'STATUS' and msg.get('status') == 'CLEAN':
-                        self.update_callback(hostname, ip, "🟢 Seguro")
+                        # Solo actualizamos si no hay un estado de alerta o monitoreo reciente
+                        pass 
+
                 except json.JSONDecodeError: pass
 
         except: pass
@@ -216,7 +297,7 @@ class ServerThread(threading.Thread):
                 del self.clients_map[hostname]
             client_sock.close()
 
-# --- INTERFAZ GRÁFICA (SIN CAMBIOS, SOLO LÓGICA) ---
+# --- INTERFAZ GRÁFICA (TU DISEÑO) ---
 class TeacherDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -436,7 +517,8 @@ class TeacherDashboard(QMainWindow):
         else:
             c = {"ok": "#40a02b", "alert": "#d20f39", "disc": "#9ca0b0"}
 
-        if "ALERT" in status: color = c["alert"]
+        # Lógica de color de celda según el estado
+        if "ALERT" in status or "DETECTÓ" in status: color = c["alert"]
         elif "Desconectado" in status: color = c["disc"]
         else: color = c["ok"]
 

@@ -7,7 +7,13 @@ import base64
 
 # Palabras clave que delatan al chat
 THREAT_KEYWORDS = [
-    "Chat", "Copilot", "Ask about", "Agent", "Inline Chat", "Generate"
+    "Github Copilot", 
+    "Ask Copilot",
+    "Inline Chat",
+    "Chat Panel",       # VS Code nombra así al panel contenedor
+    "ChatView",         # Nombre técnico interno
+    "CopilotChat",
+    "Interactive Editor" # La ventanita de Ctrl+I
 ]
 
 class VSCodeWatcher:
@@ -45,19 +51,29 @@ class VSCodeWatcher:
                     for control, depth in auto.WalkControl(vscode, maxDepth=8):
                         if not control.Name or len(control.Name) < 3: continue
                         
+                        # FILTRO DE SEGURIDAD:
+                        # Solo nos importan Paneles, Grupos o Botones.
+                        # Ignoramos "Edit", "Document" o "Text" porque eso es EL CÓDIGO del alumno.
+                        if control.ControlTypeName in ["EditControl", "DocumentControl", "TextControl"]:
+                            continue 
+
                         # Chequeo de palabras prohibidas
+                        name = control.Name.lower()
+                        
+                        # Caso especial: El panel principal a veces se llama solo "Chat"
+                        # Verificamos que sea un PANEL, no texto
+                        if "chat" == name and control.ControlTypeName in ["GroupControl", "PaneControl"]:
+                             self.violation_detected = True
+                             self.last_violation_name = "Panel Lateral de Chat"
+                             # ... tomar foto ...
+                             break
+                        
+                        # Búsqueda general de las otras keywords
                         for kw in THREAT_KEYWORDS:
-                            if kw.lower() in control.Name.lower():
-                                # ¡DETECTADO!
+                            if kw.lower() in name:
                                 self.violation_detected = True
-                                self.last_violation_name = f"IA Abierta: {control.Name}"
-                                
-                                # 3. ¡SONRÍA! TOMAMOS LA FOTO 📸
-                                # Solo tomamos foto si no hemos tomado una recientemente (para no saturar)
-                                if not self.last_screenshot_base64:
-                                    print(f"📸 TOMANDO EVIDENCIA DE: {control.Name}")
-                                    self.last_screenshot_base64 = self.take_evidence_screenshot()
-                                
+                                self.last_violation_name = f"IA Detectada: {control.Name}"
+                                # ... tomar foto ...
                                 found_threat = True
                                 break
                         if found_threat: break
