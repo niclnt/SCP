@@ -6,12 +6,26 @@ import time
 import os
 import base64
 import tempfile
-import fitz  # PyMuPDF
+import fitz
+import ctypes # <--- NECESARIO PARA ADMIN
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QLineEdit, QPushButton, QComboBox, QMessageBox, QFrame, 
-                             QTabWidget, QScrollArea)
+                             QTabWidget, QScrollArea, QSpinBox) # Agregamos QSpinBox para el puerto
 from PyQt6.QtCore import pyqtSignal, QThread, Qt
 from PyQt6.QtGui import QFont, QImage, QPixmap
+
+# --- BLOQUE DE AUTO-ELEVACIÓN A ADMINISTRADOR ---
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+if not is_admin():
+    # Si no es admin, relanzamos el script pidiendo permisos
+    print("🔄 Solicitando permisos de administrador...")
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+    sys.exit() # Cerramos la instancia sin permisos
 
 # --- IMPORTACIONES DE SEGURIDAD ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -22,10 +36,10 @@ except ImportError:
     print("❌ ERROR: Faltan security.py o watcher.py")
     sys.exit(1)
 
-# --- TEMAS (TU DISEÑO ORIGINAL) ---
+# --- TEMAS (IGUAL QUE ANTES) ---
 THEME_DARK = """
 QWidget { background-color: #1e1e2e; font-family: 'Segoe UI', sans-serif; color: #cdd6f4; }
-QLineEdit, QTextEdit { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; font-size: 14px; }
+QLineEdit, QTextEdit, QSpinBox { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; font-size: 14px; }
 QComboBox { background-color: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px; color: white; }
 QTabWidget::pane { border: 1px solid #313244; border-radius: 8px; background-color: #1e1e2e; }
 QTabBar::tab { background: #181825; color: #cdd6f4; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
@@ -37,10 +51,9 @@ QLabel#Title { font-size: 22px; font-weight: bold; color: #fab387; }
 QFrame { background-color: #181825; border-radius: 12px; }
 QScrollArea { border: none; background-color: #181825; }
 """
-
 THEME_LIGHT = """
 QWidget { background-color: #eff1f5; font-family: 'Segoe UI', sans-serif; color: #4c4f69; }
-QLineEdit, QTextEdit { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; }
+QLineEdit, QTextEdit, QSpinBox { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; }
 QComboBox { background-color: #ffffff; border: 1px solid #ccd0da; border-radius: 6px; padding: 10px; color: #4c4f69; }
 QTabWidget::pane { border: 1px solid #dce0e8; border-radius: 8px; background-color: #eff1f5; }
 QTabBar::tab { background: #e6e9ef; color: #4c4f69; padding: 10px 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 2px; }
@@ -53,7 +66,6 @@ QFrame { background-color: #e6e9ef; border-radius: 12px; border: 1px solid #dce0
 QScrollArea { border: none; background-color: #dce0e8; }
 """
 
-# --- WIDGET VISOR DE PDF ---
 class PDFViewerWidget(QScrollArea):
     def __init__(self):
         super().__init__()
@@ -68,30 +80,24 @@ class PDFViewerWidget(QScrollArea):
     def load_pdf(self, file_path):
         for i in reversed(range(self.layout_pages.count())): 
             self.layout_pages.itemAt(i).widget().setParent(None)
-
         if not file_path or not os.path.exists(file_path): return
-
         try:
             doc = fitz.open(file_path)
             for page in doc:
                 matrix = fitz.Matrix(2, 2) 
                 pix = page.get_pixmap(matrix=matrix)
-                img_data = pix.samples
-                qimg = QImage(img_data, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
+                qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
                 lbl_page = QLabel()
                 lbl_page.setPixmap(QPixmap.fromImage(qimg))
                 lbl_page.setStyleSheet("border: 1px solid #000; margin-bottom: 10px;")
                 self.layout_pages.addWidget(lbl_page)
             doc.close()
         except Exception as e:
-            lbl_err = QLabel(f"Error renderizando PDF: {str(e)}")
-            lbl_err.setStyleSheet("color: red; font-size: 16px;")
+            lbl_err = QLabel(f"Error PDF: {str(e)}")
             self.layout_pages.addWidget(lbl_err)
 
-# --- RED ---
 class DiscoveryThread(QThread):
     server_found = pyqtSignal(str, str) 
-
     def run(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -109,36 +115,37 @@ class NetworkThread(QThread):
     status_signal = pyqtSignal(str)
     pdf_received = pyqtSignal(str) 
     
-    def __init__(self, server_ip, student_name):
+    def __init__(self, server_ip, server_port, student_name): # <--- AÑADIDO PORT
         super().__init__()
         self.server_ip = server_ip
+        self.server_port = int(server_port)
         self.student_name = student_name
         self.running = True
         self.sock = None
 
     def run(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        MONITOR_INTERVAL = 60 
+        last_monitor_time = 0
+        
         try:
-            self.sock.connect((self.server_ip, 9999))
+            # CONEXIÓN DINÁMICA (IP + PUERTO)
+            self.sock.connect((self.server_ip, self.server_port))
             
             listener = threading.Thread(target=self.receive_loop)
             listener.daemon = True
             listener.start()
 
-            # --- SEGURIDAD AL INICIAR ---
-            self.status_signal.emit("🛡️ Aplicando seguridad...")
-            guard.sabotage_ai_extensions() # Configuración + Accesibilidad
-            watcher.start() # Iniciar el espía visual
+            self.status_signal.emit("🛡️ Seguridad Activada...")
+            guard.sabotage_ai_extensions()
+            watcher.start()
 
             reg_msg = json.dumps({"type": "REGISTER", "hostname": self.student_name})
             self.sock.sendall(reg_msg.encode('utf-8'))
 
             while self.running:
-                # 1. Seguridad de Procesos
+                current_time = time.time()
                 process_violations = guard.get_running_violations()
-                
-                # 2. Seguridad Visual (EL WATCHER NUEVO)
-                # Obtenemos mensaje Y evidencia fotográfica
                 chat_violation, evidence_screenshot = watcher.get_status_and_evidence()
                 
                 all_violations = []
@@ -147,25 +154,20 @@ class NetworkThread(QThread):
 
                 if all_violations:
                     self.status_signal.emit(f"⚠️ DETECTADO: {all_violations[0]}")
-                    
-                    # Preparamos el paquete de alerta
-                    packet = {
-                        "type": "ALERT", 
-                        "violations": all_violations
-                    }
-                    
-                    # ADJUNTAR EVIDENCIA SI EXISTE 📸
+                    packet = {"type": "ALERT", "violations": all_violations}
                     if evidence_screenshot:
                         packet["screenshot"] = evidence_screenshot
                         self.status_signal.emit("📸 Enviando evidencia...")
+                    self.sock.sendall(json.dumps(packet).encode('utf-8'))
 
-                    msg = json.dumps(packet)
-                else:
+                elif (current_time - last_monitor_time) > MONITOR_INTERVAL:
+                    self.status_signal.emit("📡 Chequeo rutina...")
+                    routine_screenshot = watcher.take_evidence_screenshot()
+                    packet = {"type": "MONITOR", "status": "ROUTINE_CHECK", "screenshot": routine_screenshot}
+                    self.sock.sendall(json.dumps(packet).encode('utf-8'))
+                    last_monitor_time = current_time
                     self.status_signal.emit("✅ Examen Seguro Activo")
-                    msg = json.dumps({"type": "STATUS", "status": "CLEAN"})
 
-                try: self.sock.sendall(msg.encode('utf-8'))
-                except: break 
                 time.sleep(2)
 
         except Exception as e:
@@ -180,35 +182,25 @@ class NetworkThread(QThread):
             while self.running:
                 data = self.sock.recv(10 * 1024 * 1024) 
                 if not data: break
-                
                 try:
                     msg = json.loads(data.decode('utf-8'))
-                    
                     if msg.get('type') == 'CONFIG':
-                        allowed = msg.get('allowed_apps', [])
-                        guard.update_config(allowed)
-                    
+                        guard.update_config(msg.get('allowed_apps', []))
                     elif msg.get('type') == 'EXAM_FILE':
                         filename = msg['filename']
                         b64_data = msg['file_data']
-                        print(f"[CLIENTE] PDF Recibido: {filename}")
-                        
                         file_bytes = base64.b64decode(b64_data)
                         temp_dir = tempfile.gettempdir()
                         file_path = os.path.join(temp_dir, filename)
-                        
-                        with open(file_path, "wb") as f:
-                            f.write(file_bytes)
-                        
+                        with open(file_path, "wb") as f: f.write(file_bytes)
                         self.pdf_received.emit(file_path)
-
                 except: pass     
         except: pass
 
 class StudentClient(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SCP - Examen Seguro")
+        self.setWindowTitle("SCP - Examen Seguro (Admin Mode)")
         self.resize(800, 700)
         self.is_dark_mode = True 
         
@@ -220,30 +212,25 @@ class StudentClient(QWidget):
         top_bar = QHBoxLayout()
         top_bar.addStretch()
         self.btn_theme = QPushButton("⚙️ Tema")
-        self.btn_theme.setObjectName("Config")
         self.btn_theme.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_theme.clicked.connect(self.toggle_theme)
         self.btn_theme.setFixedWidth(100)
         top_bar.addWidget(self.btn_theme)
         self.layout.addLayout(top_bar)
 
-        # Tabs
         self.tabs = QTabWidget()
         self.layout.addWidget(self.tabs)
 
-        # TAB 1: CONEXIÓN
         self.tab_conn = QWidget()
         self.setup_connection_tab()
         self.tabs.addTab(self.tab_conn, "📡 Conexión")
 
-        # TAB 2: EXAMEN (Visor PDF)
         self.tab_exam = QWidget()
         self.layout_exam = QVBoxLayout()
         self.tab_exam.setLayout(self.layout_exam)
         
-        self.lbl_exam_status = QLabel("Esperando archivo del profesor...")
+        self.lbl_exam_status = QLabel("Esperando archivo...")
         self.lbl_exam_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_exam_status.setStyleSheet("font-size: 16px; color: #6c7086; margin-bottom: 10px;")
         self.layout_exam.addWidget(self.lbl_exam_status)
 
         self.pdf_viewer = PDFViewerWidget()
@@ -252,48 +239,89 @@ class StudentClient(QWidget):
         self.tabs.addTab(self.tab_exam, "📝 Examen")
         self.tabs.setTabEnabled(1, False) 
 
-        # Threads
         self.discovery = DiscoveryThread()
-        self.discovery.server_found.connect(self.add_server)
+        self.discovery.server_found.connect(self.add_server_to_combo)
         self.discovery.start()
-        self.detected_ips = {}
         self.net_thread = None
 
         self.apply_theme()
 
     def setup_connection_tab(self):
         layout = QVBoxLayout()
-        layout.setSpacing(20)
-        layout.setContentsMargins(100, 50, 100, 50) 
+        layout.setSpacing(15)
+        layout.setContentsMargins(80, 40, 80, 40)
         self.tab_conn.setLayout(layout)
 
-        lbl_title = QLabel("SCP ExamGuard")
+        lbl_title = QLabel("SCP - Ingreso")
         lbl_title.setObjectName("Title")
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(lbl_title)
         
-        frame_login = QFrame()
-        l_login = QVBoxLayout()
-        frame_login.setLayout(l_login)
+        frame = QFrame()
+        l_form = QVBoxLayout()
+        frame.setLayout(l_form)
         
         self.input_name = QLineEdit()
         self.input_name.setPlaceholderText("Nombre del Alumno")
-        l_login.addWidget(self.input_name)
+        l_form.addWidget(self.input_name)
         
+        # SELECCIONADOR DE MODO (LAN vs REMOTO)
+        l_mode = QHBoxLayout()
+        self.lbl_mode = QLabel("Modo:")
+        self.combo_mode = QComboBox()
+        self.combo_mode.addItems(["LAN (WiFi Local)", "Remoto (Internet/Ngrok)"])
+        self.combo_mode.currentIndexChanged.connect(self.toggle_mode_inputs)
+        l_mode.addWidget(self.lbl_mode)
+        l_mode.addWidget(self.combo_mode)
+        l_form.addLayout(l_mode)
+
+        # INPUTS LAN (Automático)
         self.combo_servers = QComboBox()
-        self.combo_servers.addItem("Buscando profesores...")
-        l_login.addWidget(self.combo_servers)
+        self.combo_servers.addItem("Buscando profesores en red local...")
+        l_form.addWidget(self.combo_servers)
+
+        # INPUTS REMOTOS (Manual)
+        self.input_host = QLineEdit()
+        self.input_host.setPlaceholderText("Dirección (ej: 0.tcp.ngrok.io)")
+        self.input_host.setVisible(False)
+        l_form.addWidget(self.input_host)
+
+        self.input_port = QSpinBox()
+        self.input_port.setRange(1, 65535)
+        self.input_port.setValue(9999) # Puerto default LAN
+        self.input_port.setPrefix("Puerto: ")
+        self.input_port.setVisible(False)
+        l_form.addWidget(self.input_port)
         
-        self.btn_connect = QPushButton("Ingresar al Examen")
+        self.btn_connect = QPushButton("CONECTAR")
         self.btn_connect.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_connect.clicked.connect(self.start_exam)
-        l_login.addWidget(self.btn_connect)
+        l_form.addWidget(self.btn_connect)
         
-        layout.addWidget(frame_login)
-        self.lbl_status = QLabel("Esperando conexión...")
+        layout.addWidget(frame)
+        self.lbl_status = QLabel("Modo Administrador Activo")
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_status)
         layout.addStretch()
+
+    def toggle_mode_inputs(self):
+        is_remote = self.combo_mode.currentIndex() == 1
+        self.combo_servers.setVisible(not is_remote)
+        self.input_host.setVisible(is_remote)
+        self.input_port.setVisible(is_remote)
+
+    def add_server_to_combo(self, name, ip):
+        # Solo agregamos si estamos en modo LAN
+        if self.combo_mode.currentIndex() == 0:
+            txt = f"{name} ({ip})"
+            if self.combo_servers.count() == 1 and "Buscando" in self.combo_servers.itemText(0):
+                self.combo_servers.clear()
+            
+            # Evitar duplicados
+            for i in range(self.combo_servers.count()):
+                if self.combo_servers.itemText(i) == txt: return
+            
+            self.combo_servers.addItem(txt, ip)
 
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
@@ -302,56 +330,39 @@ class StudentClient(QWidget):
     def apply_theme(self):
         style = THEME_DARK if self.is_dark_mode else THEME_LIGHT
         self.setStyleSheet(style)
-        self.btn_theme.setText("🌙" if self.is_dark_mode else "☀️")
-        self.update_status_label(self.lbl_status.text())
-
-    def add_server(self, name, ip):
-        if ip not in self.detected_ips:
-            if self.combo_servers.count() == 1 and self.combo_servers.itemText(0) == "Buscando profesores...":
-                self.combo_servers.clear()
-            self.detected_ips[ip] = name
-            self.combo_servers.addItem(f"{name} ({ip})", ip)
 
     def start_exam(self):
         name = self.input_name.text().strip()
         if not name: return
-        idx = self.combo_servers.currentIndex()
-        if idx < 0: return
-        server_ip = self.combo_servers.itemData(idx)
-        if not server_ip: return
 
+        # Determinar IP y Puerto
+        if self.combo_mode.currentIndex() == 0: # LAN
+            idx = self.combo_servers.currentIndex()
+            if idx < 0: return
+            server_ip = self.combo_servers.itemData(idx)
+            server_port = 9999
+            if not server_ip: return
+        else: # REMOTO
+            server_ip = self.input_host.text().strip()
+            server_port = self.input_port.value()
+            if not server_ip: return
+
+        # Bloquear UI
         self.input_name.setDisabled(True)
-        self.combo_servers.setDisabled(True)
-        self.btn_connect.setText("🔒 CONECTADO")
-        self.btn_connect.setObjectName("Locked")
+        self.btn_connect.setText("BLOQUEADO")
         self.btn_connect.setDisabled(True)
-        self.style().unpolish(self.btn_connect)
-        self.style().polish(self.btn_connect)
 
         self.tabs.setTabEnabled(1, True)
         self.tabs.setCurrentIndex(1)
 
-        self.net_thread = NetworkThread(server_ip, name)
-        self.net_thread.status_signal.connect(self.update_status_label)
+        self.net_thread = NetworkThread(server_ip, server_port, name)
+        self.net_thread.status_signal.connect(self.lbl_status.setText)
         self.net_thread.pdf_received.connect(self.on_pdf_received)
         self.net_thread.start()
 
-    def update_status_label(self, text):
-        self.lbl_status.setText(text)
-        if self.is_dark_mode: c = {"block": "#f38ba8", "safe": "#a6e3a1", "wait": "#6c7086"}
-        else: c = {"block": "#d20f39", "safe": "#40a02b", "wait": "#9ca0b0"}
-        if "DETECTADO" in text: color = c["block"]
-        elif "Seguro" in text: color = c["safe"]
-        else: color = c["wait"]
-        self.lbl_status.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 16px;")
-
     def on_pdf_received(self, filepath):
-        filename = os.path.basename(filepath)
-        self.lbl_exam_status.setText(f"Viendo: {filename}")
-        self.lbl_exam_status.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 14px;")
+        self.lbl_exam_status.setText(f"Viendo: {os.path.basename(filepath)}")
         self.pdf_viewer.load_pdf(filepath)
-        if self.tabs.currentIndex() != 1:
-            self.tabs.setTabText(1, "🔴 ¡EXAMEN LLEGÓ!")
 
     def closeEvent(self, event):
         if self.net_thread:

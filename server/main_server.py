@@ -9,32 +9,36 @@ from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QTableWidget, QTableWidgetItem, QHeaderView, 
                              QPushButton, QCheckBox, QFrame, QMessageBox, QAbstractItemView,
-                             QTabWidget, QTextEdit, QFileDialog) 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
+                             QTabWidget, QFileDialog, QInputDialog, QLineEdit) 
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QColor, QFont, QIcon
 
-# --- IMPORTACIONES PARA OCR (VISIÓN ARTIFICIAL) ---
+# --- 1. INTEGRACIÓN NGROK (ACCESO REMOTO) ---
+try:
+    from pyngrok import ngrok, conf
+    NGROK_AVAILABLE = True
+except ImportError:
+    NGROK_AVAILABLE = False
+    print("⚠️ 'pyngrok' no instalado. El modo remoto no funcionará (pip install pyngrok).")
+
+# --- 2. OCR (VISIÓN ARTIFICIAL) ---
 try:
     import pytesseract
     from PIL import Image
     import io
-    # RUTA A TESSERACT: Ajusta esto si lo instalaste en otra carpeta
-    # Si está en el PATH de Windows, puedes comentar esta línea.
+    # Ajusta la ruta si es necesario. Si está en el PATH, puedes comentar la línea siguiente.
     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
     OCR_AVAILABLE = True
-except ImportError:
-    print("⚠️ 'pytesseract' o 'pillow' no instalados. El servidor guardará fotos pero no leerá texto.")
+except:
     OCR_AVAILABLE = False
-except Exception:
-    print("⚠️ Tesseract.exe no encontrado en la ruta por defecto.")
-    OCR_AVAILABLE = False
+    print("⚠️ Tesseract no detectado. Se guardarán las fotos pero no se leerá el texto.")
 
 # --- CONFIGURACIÓN ---
 EVIDENCE_DIR = "evidence"
-if not os.path.exists(EVIDENCE_DIR):
-    os.makedirs(EVIDENCE_DIR)
+CONFIG_FILE = "server_config.json" # Para guardar el token de Ngrok
+if not os.path.exists(EVIDENCE_DIR): os.makedirs(EVIDENCE_DIR)
 
-# --- TEMAS (TU DISEÑO ORIGINAL) ---
+# --- TEMAS ---
 THEME_DARK = """
 QMainWindow { background-color: #1e1e2e; }
 QWidget { font-family: 'Segoe UI', sans-serif; font-size: 14px; color: #cdd6f4; }
@@ -46,17 +50,15 @@ QTabBar::tab { background: #181825; color: #cdd6f4; padding: 10px 20px; border-t
 QTabBar::tab:selected { background: #89b4fa; color: #1e1e2e; font-weight: bold; }
 QPushButton { background-color: #89b4fa; color: #1e1e2e; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #b4befe; }
-QPushButton#Config { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 8px; }
-QPushButton#Config:hover { background-color: #45475a; }
-QPushButton#SingleUser { background-color: #fab387; color: #1e1e2e; }
-QPushButton#SingleUser:hover { background-color: #f9e2af; }
+QPushButton#Remote { background-color: #f38ba8; color: #1e1e2e; }
+QPushButton#Remote:hover { background-color: #f9e2af; }
 QCheckBox { spacing: 8px; color: #cdd6f4; }
 QCheckBox::indicator { width: 20px; height: 20px; border-radius: 6px; border: 1px solid #585b70; }
 QCheckBox::indicator:checked { background-color: #a6e3a1; border: 1px solid #a6e3a1; }
 QLabel#Title { font-size: 20px; font-weight: bold; color: #fab387; }
 QLabel#SubInfo { color: #6c7086; font-size: 12px; }
+QLabel#RemoteInfo { color: #a6e3a1; font-weight: bold; font-size: 13px; background-color: #313244; padding: 8px; border-radius: 6px; }
 """
-
 THEME_LIGHT = """
 QMainWindow { background-color: #eff1f5; }
 QWidget { font-family: 'Segoe UI', sans-serif; font-size: 14px; color: #4c4f69; }
@@ -68,15 +70,14 @@ QTabBar::tab { background: #e6e9ef; color: #4c4f69; padding: 10px 20px; border-t
 QTabBar::tab:selected { background: #1e66f5; color: #ffffff; font-weight: bold; }
 QPushButton { background-color: #1e66f5; color: #ffffff; border-radius: 8px; padding: 10px; font-weight: bold; }
 QPushButton:hover { background-color: #7287fd; }
-QPushButton#Config { background-color: #e6e9ef; color: #4c4f69; border: 1px solid #dce0e8; padding: 8px; }
-QPushButton#Config:hover { background-color: #dce0e8; }
-QPushButton#SingleUser { background-color: #fe640b; color: #ffffff; }
-QPushButton#SingleUser:hover { background-color: #ff9d6e; }
+QPushButton#Remote { background-color: #fe640b; color: #ffffff; }
+QPushButton#Remote:hover { background-color: #ff9d6e; }
 QCheckBox { spacing: 8px; color: #4c4f69; }
 QCheckBox::indicator { width: 20px; height: 20px; border-radius: 6px; border: 1px solid #9ca0b0; background-color: white; }
 QCheckBox::indicator:checked { background-color: #40a02b; border: 1px solid #40a02b; }
 QLabel#Title { font-size: 20px; font-weight: bold; color: #fe640b; }
 QLabel#SubInfo { color: #9ca0b0; font-size: 12px; }
+QLabel#RemoteInfo { color: #1e66f5; font-weight: bold; font-size: 13px; background-color: #dce0e8; padding: 8px; border-radius: 6px; }
 """
 
 def get_lan_ip():
@@ -84,12 +85,11 @@ def get_lan_ip():
     try:
         s.connect(('8.8.8.8', 80))
         IP = s.getsockname()[0]
-    except Exception:
-        IP = '127.0.0.1'
-    finally:
-        s.close()
+    except Exception: IP = '127.0.0.1'
+    finally: s.close()
     return IP
 
+# --- HILO DE BROADCAST LAN ---
 class BroadcastSender(threading.Thread):
     def __init__(self, port=5555): 
         super().__init__()
@@ -102,17 +102,12 @@ class BroadcastSender(threading.Thread):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         while self.running:
             try:
-                real_ip = get_lan_ip()
-                message = json.dumps({
-                    "name": f"Clase de {self.host_name}",
-                    "type": "SCP_SERVER",
-                    "ip": real_ip
-                })
-                sock.sendto(message.encode('utf-8'), ('<broadcast>', self.port))
+                msg = json.dumps({"name": f"Clase de {self.host_name}", "type": "SCP_SERVER", "ip": get_lan_ip()})
+                sock.sendto(msg.encode('utf-8'), ('<broadcast>', self.port))
                 time.sleep(2) 
-            except Exception:
-                time.sleep(5)
+            except: time.sleep(5)
 
+# --- HILO PRINCIPAL DEL SERVIDOR ---
 class ServerThread(threading.Thread):
     def __init__(self, port, callback):
         super().__init__()
@@ -136,112 +131,61 @@ class ServerThread(threading.Thread):
             except: break
 
     def broadcast_config(self, allowed_list):
-        msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
-        self._broadcast(msg)
+        self._broadcast(json.dumps({"type": "CONFIG", "allowed_apps": allowed_list}))
 
     def broadcast_pdf(self, filepath):
         try:
             filename = os.path.basename(filepath)
-            filesize = os.path.getsize(filepath)
-            
-            if filesize > 10 * 1024 * 1024:
-                return False, "El archivo es muy pesado (Max 10MB)"
-
+            if os.path.getsize(filepath) > 10 * 1024 * 1024: return False, "Archivo muy grande (>10MB)"
             with open(filepath, "rb") as f:
-                encoded_data = base64.b64encode(f.read()).decode('utf-8')
-
-            msg = json.dumps({
-                "type": "EXAM_FILE",
-                "filename": filename,
-                "file_data": encoded_data
-            })
-            print(f"[SERVIDOR] Enviando PDF: {filename}")
+                b64 = base64.b64encode(f.read()).decode('utf-8')
+            msg = json.dumps({"type": "EXAM_FILE", "filename": filename, "file_data": b64})
             self._broadcast(msg)
-            return True, "Enviado correctamente"
-        except Exception as e:
-            return False, str(e)
+            return True, "Enviado"
+        except Exception as e: return False, str(e)
 
     def _broadcast(self, json_msg):
-        dead_clients = []
-        for hostname, sock in self.clients_map.items():
-            try:
-                sock.sendall(json_msg.encode('utf-8'))
-            except:
-                dead_clients.append(hostname)
-        for h in dead_clients:
-            self.clients_map.pop(h, None)
+        dead = []
+        for h, s in self.clients_map.items():
+            try: s.sendall(json_msg.encode('utf-8'))
+            except: dead.append(h)
+        for h in dead: self.clients_map.pop(h, None)
 
-    def send_private_config(self, target_hostname, allowed_list):
-        sock = self.clients_map.get(target_hostname)
+    def send_private_config(self, target, allowed):
+        sock = self.clients_map.get(target)
         if sock:
-            msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
             try:
-                sock.sendall(msg.encode('utf-8'))
+                sock.sendall(json.dumps({"type": "CONFIG", "allowed_apps": allowed}).encode('utf-8'))
                 return True
             except: return False
         return False
 
-    # --- NUEVA FUNCIÓN: ANÁLISIS DE CAPTURAS ---
     def analyze_screenshot(self, student_name, base64_img, is_alert=False):
-        """
-        1. Guarda la imagen en evidence/NombreAlumno/.
-        2. Si OCR está disponible, lee el texto.
-        3. Si encuentra frases de IA, devuelve una violación.
-        """
         try:
-            # 1. Preparar rutas
             timestamp = datetime.now().strftime("%H-%M-%S")
             prefix = "ALERT" if is_alert else "MONITOR"
             safe_name = "".join([c for c in student_name if c.isalpha() or c.isdigit() or c==' ']).strip()
-            
-            # Carpeta individual por alumno
             student_dir = os.path.join(EVIDENCE_DIR, safe_name)
             if not os.path.exists(student_dir): os.makedirs(student_dir)
             
-            filename = f"{prefix}_{timestamp}.jpg"
-            filepath = os.path.join(student_dir, filename)
-            
-            # 2. Guardar Imagen
+            filepath = os.path.join(student_dir, f"{prefix}_{timestamp}.jpg")
             img_bytes = base64.b64decode(base64_img)
             
-            # Usamos PIL si está disponible, sino escritura binaria simple
             if OCR_AVAILABLE:
                 image = Image.open(io.BytesIO(img_bytes))
                 image.save(filepath)
-            else:
-                with open(filepath, "wb") as f:
-                    f.write(img_bytes)
-            
-            # 3. Análisis OCR (Solo si tenemos Tesseract)
-            detected_violation = None
-            
-            if OCR_AVAILABLE:
-                # Convertimos imagen a texto
-                text_content = pytesseract.image_to_string(image).lower()
-                
-                # LISTA SEGURA: Frases exclusivas de la Interfaz de IA
-                keywords = [
-                    "ask copilot", 
-                    "build with agent", 
-                    "generate agent instructions",
-                    "/fix", 
-                    "/explain", 
-                    "github copilot",
-                    "ask about your code",
-                    "inline chat",
-                    "welcome to chat"
-                ]
-                
+                text = pytesseract.image_to_string(image).lower()
+                keywords = ["ask copilot", "build with agent", "/fix", "/explain", "inline chat", "welcome to chat"]
                 for kw in keywords:
-                    if kw in text_content:
-                        detected_violation = f"SERVIDOR DETECTÓ: UI de IA ('{kw}')"
-                        print(f"🚨 {safe_name}: OCR encontró '{kw}' en captura.")
-                        break
+                    if kw in text:
+                        print(f"🚨 {safe_name}: IA Detectada '{kw}'")
+                        return filepath, f"SERVIDOR DETECTÓ: UI de IA ('{kw}')"
+            else:
+                with open(filepath, "wb") as f: f.write(img_bytes)
             
-            return filepath, detected_violation
-
+            return filepath, None
         except Exception as e:
-            print(f"Error analizando foto: {e}")
+            print(f"Error OCR: {e}")
             return None, None
 
     def handle_client(self, client_sock, addr):
@@ -249,63 +193,42 @@ class ServerThread(threading.Thread):
         hostname = "Desconocido"
         try:
             while True:
-                # Buffer más grande para recibir imágenes (2MB)
                 data = client_sock.recv(2 * 1024 * 1024)
                 if not data: break
-                
                 try: 
                     msg = json.loads(data.decode('utf-8'))
-                    
                     if msg['type'] == 'REGISTER':
                         hostname = msg['hostname']
                         self.clients_map[hostname] = client_sock
                         self.update_callback(hostname, ip, "🟢 Conectado")
-                    
-                    # --- CASO 1: EL CLIENTE REPORTA ALERTA ---
                     elif msg['type'] == 'ALERT':
-                        violations = ", ".join(msg['violations'])
-                        self.update_callback(hostname, ip, f"🔴 ALERTA: {violations}")
-                        
-                        # Guardamos evidencia si viene
-                        if 'screenshot' in msg:
-                            self.analyze_screenshot(hostname, msg['screenshot'], is_alert=True)
-                            
-                    # --- CASO 2: REPORTE DE RUTINA (MONITOREO) ---
+                        self.update_callback(hostname, ip, f"🔴 ALERTA: {', '.join(msg['violations'])}")
+                        if 'screenshot' in msg: self.analyze_screenshot(hostname, msg['screenshot'], True)
                     elif msg['type'] == 'MONITOR':
-                        screenshot_b64 = msg.get('screenshot')
-                        if screenshot_b64:
-                            # El servidor analiza la foto buscando lo que el cliente quizás no vio
-                            path, violation = self.analyze_screenshot(hostname, screenshot_b64, is_alert=False)
-                            
-                            if violation:
-                                # El OCR atrapó al alumno
-                                self.update_callback(hostname, ip, f"🔴 {violation}")
-                            else:
-                                # Todo limpio
-                                self.update_callback(hostname, ip, f"🟢 Monitoreado ({datetime.now().strftime('%H:%M')})")
-
-                    elif msg['type'] == 'STATUS' and msg.get('status') == 'CLEAN':
-                        # Solo actualizamos si no hay un estado de alerta o monitoreo reciente
-                        pass 
-
-                except json.JSONDecodeError: pass
-
+                        if msg.get('screenshot'):
+                            _, viol = self.analyze_screenshot(hostname, msg['screenshot'], False)
+                            if viol: self.update_callback(hostname, ip, f"🔴 {viol}")
+                            else: self.update_callback(hostname, ip, f"🟢 Monitoreado ({datetime.now().strftime('%H:%M')})")
+                    elif msg['type'] == 'STATUS' and msg.get('status') == 'CLEAN': pass 
+                except: pass
         except: pass
         finally:
             self.update_callback(hostname, ip, "⚪ Desconectado")
-            if hostname in self.clients_map:
-                del self.clients_map[hostname]
+            if hostname in self.clients_map: del self.clients_map[hostname]
             client_sock.close()
 
-# --- INTERFAZ GRÁFICA (TU DISEÑO) ---
+# --- INTERFAZ GRÁFICA ---
 class TeacherDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SCP - Monitor Docente Pro")
-        self.resize(1150, 750)
+        self.resize(1200, 750)
         self.is_dark_mode = True 
         self.selected_pdf_path = None
+        self.ngrok_tunnel = None 
         
+        self.load_config() # Cargar token guardado
+
         self.broadcaster = BroadcastSender()
         self.broadcaster.daemon = True 
         self.broadcaster.start()
@@ -318,41 +241,50 @@ class TeacherDashboard(QMainWindow):
         self.setCentralWidget(main_widget)
         global_layout = QVBoxLayout()
         global_layout.setContentsMargins(20, 20, 20, 20)
-        global_layout.setSpacing(15)
         main_widget.setLayout(global_layout)
 
-        # 1. TOP BAR
+        # TOP BAR
         top_bar = QHBoxLayout()
         lbl_main_title = QLabel("SCP Monitor")
         lbl_main_title.setObjectName("Title")
         top_bar.addWidget(lbl_main_title)
         top_bar.addStretch() 
-        self.btn_theme = QPushButton("⚙️ Tema Oscuro")
-        self.btn_theme.setObjectName("Config")
+        self.btn_theme = QPushButton("⚙️ Tema")
         self.btn_theme.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_theme.setFixedWidth(150)
         self.btn_theme.clicked.connect(self.toggle_theme)
         top_bar.addWidget(self.btn_theme)
         global_layout.addLayout(top_bar)
 
-        # 2. CONTENIDO PRINCIPAL
         content_layout = QHBoxLayout()
-        content_layout.setSpacing(25)
         global_layout.addLayout(content_layout)
 
-        # A. PANEL LATERAL
+        # PANEL LATERAL
         side_panel = QFrame()
-        side_panel.setFixedWidth(280)
+        side_panel.setFixedWidth(300)
         side_layout = QVBoxLayout()
-        side_layout.setContentsMargins(20, 25, 20, 25)
-        side_layout.setSpacing(15)
         side_panel.setLayout(side_layout)
         
         lbl_control = QLabel("Controles")
         lbl_control.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         side_layout.addWidget(lbl_control)
-        side_layout.addSpacing(5)
         
+        # --- SECCIÓN REMOTA ---
+        side_layout.addSpacing(10)
+        self.btn_remote = QPushButton("🌐 Activar Acceso Remoto")
+        self.btn_remote.setObjectName("Remote")
+        self.btn_remote.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_remote.clicked.connect(self.toggle_remote_mode)
+        side_layout.addWidget(self.btn_remote)
+        
+        self.lbl_remote_info = QLabel("")
+        self.lbl_remote_info.setObjectName("RemoteInfo")
+        self.lbl_remote_info.setVisible(False)
+        self.lbl_remote_info.setWordWrap(True)
+        self.lbl_remote_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        side_layout.addWidget(self.lbl_remote_info)
+        # -----------------------
+
+        side_layout.addSpacing(20)
         lbl_wb = QLabel("🔓 Permitir Apps:")
         side_layout.addWidget(lbl_wb)
         self.chk_chrome = QCheckBox("Navegador Web")
@@ -361,167 +293,157 @@ class TeacherDashboard(QMainWindow):
         side_layout.addWidget(self.chk_chrome)
         side_layout.addWidget(self.chk_discord)
         side_layout.addWidget(self.chk_calc)
-        side_layout.addSpacing(15)
         
         self.btn_apply = QPushButton("Aplicar a TODOS")
-        self.btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_apply.clicked.connect(self.broadcast_rules)
         side_layout.addWidget(self.btn_apply)
 
         self.btn_apply_single = QPushButton("Aplicar a Selección")
         self.btn_apply_single.setObjectName("SingleUser")
-        self.btn_apply_single.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_apply_single.clicked.connect(self.apply_to_selection)
         side_layout.addWidget(self.btn_apply_single)
         
         side_layout.addStretch()
-        real_ip = get_lan_ip()
-        self.lbl_info = QLabel(f"IP Servidor:\n{real_ip}")
+        self.lbl_info = QLabel(f"IP LAN:\n{get_lan_ip()}")
         self.lbl_info.setObjectName("SubInfo")
         self.lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         side_layout.addWidget(self.lbl_info)
 
         content_layout.addWidget(side_panel)
 
-        # B. TABS
+        # TABS Y MONITOR
         self.tabs = QTabWidget()
         content_layout.addWidget(self.tabs)
 
-        # TAB 1: MONITOR
         self.tab_monitor = QWidget()
         tab_mon_layout = QVBoxLayout()
         self.tab_monitor.setLayout(tab_mon_layout)
-        
-        lbl_table = QLabel("Estado de Alumnos")
-        lbl_table.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 5px;")
-        tab_mon_layout.addWidget(lbl_table)
-        
         self.table = QTableWidget()
         self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Alumno", "IP", "Estado Actual"])
+        self.table.setHorizontalHeaderLabels(["Alumno", "IP", "Estado"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setShowGrid(False)
-        self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(45)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         tab_mon_layout.addWidget(self.table)
         self.tabs.addTab(self.tab_monitor, "📡 Monitor")
 
-        # TAB 2: PDF (CONSIGNA)
         self.tab_exam = QWidget()
         tab_exam_layout = QVBoxLayout()
-        tab_exam_layout.setContentsMargins(40, 40, 40, 40)
-        tab_exam_layout.setSpacing(20)
         self.tab_exam.setLayout(tab_exam_layout)
-        
-        lbl_exam_title = QLabel("Cargar Archivo de Examen (PDF)")
-        lbl_exam_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        lbl_exam_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        tab_exam_layout.addWidget(lbl_exam_title)
-
-        self.lbl_file_status = QLabel("Ningún archivo seleccionado")
-        self.lbl_file_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_file_status.setStyleSheet("color: #6c7086; font-size: 14px;")
-        tab_exam_layout.addWidget(self.lbl_file_status)
-
-        btn_select_file = QPushButton("📂 Seleccionar PDF")
-        btn_select_file.setFixedSize(200, 50)
-        btn_select_file.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_select_file = QPushButton("📂 Cargar PDF")
         btn_select_file.clicked.connect(self.select_pdf)
-        
-        h_layout_btn = QHBoxLayout()
-        h_layout_btn.addStretch()
-        h_layout_btn.addWidget(btn_select_file)
-        h_layout_btn.addStretch()
-        tab_exam_layout.addLayout(h_layout_btn)
-
-        tab_exam_layout.addSpacing(20)
-        
-        self.btn_send_pdf = QPushButton("📤 ENVIAR PDF A ALUMNOS")
-        self.btn_send_pdf.setFixedHeight(60)
-        self.btn_send_pdf.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_send_pdf.setEnabled(False) 
-        self.btn_send_pdf.setStyleSheet("background-color: #313244; color: #6c7086;") 
+        tab_exam_layout.addWidget(btn_select_file)
+        self.btn_send_pdf = QPushButton("📤 ENVIAR AHORA")
+        self.btn_send_pdf.setEnabled(False)
         self.btn_send_pdf.clicked.connect(self.send_pdf_broadcast)
         tab_exam_layout.addWidget(self.btn_send_pdf)
-        
         tab_exam_layout.addStretch()
+        self.tabs.addTab(self.tab_exam, "📝 Examen")
 
-        self.tabs.addTab(self.tab_exam, "📝 Consigna PDF")
-        
         self.apply_theme()
 
+    # --- LÓGICA DE NGROK ---
+    def load_config(self):
+        self.ngrok_token = ""
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, 'r') as f:
+                    data = json.load(f)
+                    self.ngrok_token = data.get("ngrok_token", "")
+            except: pass
+
+    def save_config(self):
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump({"ngrok_token": self.ngrok_token}, f)
+
+    def toggle_remote_mode(self):
+        if not NGROK_AVAILABLE:
+            QMessageBox.critical(self, "Error", "Falta librería 'pyngrok'.\nEjecuta: pip install pyngrok")
+            return
+
+        if self.ngrok_tunnel:
+            # APAGAR
+            ngrok.disconnect(self.ngrok_tunnel.public_url)
+            self.ngrok_tunnel = None
+            self.btn_remote.setText("🌐 Activar Acceso Remoto")
+            self.lbl_remote_info.setVisible(False)
+        else:
+            # ENCENDER
+            if not self.ngrok_token:
+                text, ok = QInputDialog.getText(self, "Configurar Ngrok", 
+                    "Pega tu Authtoken de Ngrok (solo la primera vez):\nConsíguelo gratis en dashboard.ngrok.com", 
+                    QLineEdit.EchoMode.Normal, "")
+                if ok and text:
+                    self.ngrok_token = text.strip()
+                    self.save_config()
+                    conf.get_default().auth_token = self.ngrok_token
+                else: return
+
+            try:
+                conf.get_default().auth_token = self.ngrok_token
+                self.ngrok_tunnel = ngrok.connect(9999, "tcp")
+                public_url = self.ngrok_tunnel.public_url
+                
+                clean_url = public_url.replace("tcp://", "")
+                parts = clean_url.split(":")
+                
+                self.lbl_remote_info.setText(f"📡 DATOS PARA ALUMNOS:\n\nDIRECCIÓN: {parts[0]}\nPUERTO: {parts[1]}")
+                self.lbl_remote_info.setVisible(True)
+                self.btn_remote.setText("🛑 Detener Remoto")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error Ngrok", f"No se pudo iniciar el túnel.\nVerifica tu Token.\nError: {e}")
+                self.ngrok_token = ""
+                self.save_config()
+
+    # --- RESTO DE FUNCIONES UI ---
+    def closeEvent(self, event):
+        if self.ngrok_tunnel: ngrok.kill() 
+        self.server_thread.running = False
+        event.accept()
+
     def select_pdf(self):
-        fname, _ = QFileDialog.getOpenFileName(self, 'Abrir Archivo de Examen', '.', "PDF Files (*.pdf)")
+        fname, _ = QFileDialog.getOpenFileName(self, 'PDF', '.', "PDF Files (*.pdf)")
         if fname:
             self.selected_pdf_path = fname
-            filename = os.path.basename(fname)
-            self.lbl_file_status.setText(f"✅ Archivo listo: {filename}")
-            self.lbl_file_status.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 16px;")
-            
             self.btn_send_pdf.setEnabled(True)
-            self.btn_send_pdf.setText(f"📤 ENVIAR '{filename}' AHORA")
-            self.btn_send_pdf.setStyleSheet("background-color: #fab387; color: #1e1e2e; font-size: 16px; font-weight: bold;")
+            self.btn_send_pdf.setText(f"📤 ENVIAR {os.path.basename(fname)}")
 
     def send_pdf_broadcast(self):
         if not self.selected_pdf_path: return
-        
-        confirm = QMessageBox.question(self, "Confirmar Envío", 
-                                       "¿Estás seguro de enviar este archivo a TODOS los alumnos conectados?\n\nSe abrirá automáticamente en sus pantallas.",
-                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        
-        if confirm == QMessageBox.StandardButton.Yes:
-            success, msg = self.server_thread.broadcast_pdf(self.selected_pdf_path)
-            if success:
-                QMessageBox.information(self, "Éxito", "El archivo se ha enviado correctamente.")
-            else:
-                QMessageBox.critical(self, "Error", f"Fallo el envío: {msg}")
+        ok, msg = self.server_thread.broadcast_pdf(self.selected_pdf_path)
+        if ok: QMessageBox.information(self, "OK", "Enviado")
+        else: QMessageBox.critical(self, "Error", msg)
 
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
         self.apply_theme()
 
     def apply_theme(self):
-        if self.is_dark_mode:
-            self.setStyleSheet(THEME_DARK)
-            self.btn_theme.setText("🌙 Modo Noche")
-        else:
-            self.setStyleSheet(THEME_LIGHT)
-            self.btn_theme.setText("☀️ Modo Día")
-        
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 2)
-            if item: self.update_row_color(row, item.text())
+        self.setStyleSheet(THEME_DARK if self.is_dark_mode else THEME_LIGHT)
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, 2)
+            if item: self.update_row_color(r, item.text())
 
     def update_row(self, hostname, ip, status):
-        found_row = -1
-        for row in range(self.table.rowCount()):
-            if self.table.item(row, 0).text() == hostname:
-                found_row = row
+        row = -1
+        for r in range(self.table.rowCount()):
+            if self.table.item(r, 0).text() == hostname:
+                row = r
                 break
-        
-        if found_row == -1:
-            found_row = self.table.rowCount()
-            self.table.insertRow(found_row)
-            self.table.setItem(found_row, 0, QTableWidgetItem(hostname))
-            self.table.setItem(found_row, 1, QTableWidgetItem(ip))
-            self.table.setItem(found_row, 2, QTableWidgetItem(""))
-
-        self.update_row_color(found_row, status)
+        if row == -1:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(hostname))
+            self.table.setItem(row, 1, QTableWidgetItem(ip))
+            self.table.setItem(row, 2, QTableWidgetItem(""))
+        self.update_row_color(row, status)
 
     def update_row_color(self, row, status):
-        if self.is_dark_mode:
-            c = {"ok": "#a6e3a1", "alert": "#f38ba8", "disc": "#6c7086"}
-        else:
-            c = {"ok": "#40a02b", "alert": "#d20f39", "disc": "#9ca0b0"}
-
-        # Lógica de color de celda según el estado
-        if "ALERT" in status or "DETECTÓ" in status: color = c["alert"]
-        elif "Desconectado" in status: color = c["disc"]
-        else: color = c["ok"]
-
+        c = {"ok": "#a6e3a1", "alert": "#f38ba8", "disc": "#6c7086"} if self.is_dark_mode else \
+            {"ok": "#40a02b", "alert": "#d20f39", "disc": "#9ca0b0"}
+        color = c["alert"] if "ALERT" in status or "DETECTÓ" in status else c["disc"] if "Desconectado" in status else c["ok"]
         item = QTableWidgetItem(status)
         item.setForeground(QColor(color))
         item.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
@@ -532,28 +454,16 @@ class TeacherDashboard(QMainWindow):
         if self.chk_chrome.isChecked(): allowed.extend(["chrome.exe", "msedge.exe"])
         if self.chk_discord.isChecked(): allowed.append("discord.exe")
         if self.chk_calc.isChecked(): allowed.append("calculatorapp.exe")
-        
         self.server_thread.broadcast_config(allowed)
-        self.btn_apply.setText("¡Enviado!")
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(2000, lambda: self.btn_apply.setText("Aplicar a TODOS"))
 
     def apply_to_selection(self):
         sel = self.table.selectedItems()
-        if not sel:
-            QMessageBox.warning(self, "Atención", "Selecciona un alumno.")
-            return
-        target = sel[0].text()
-        
+        if not sel: return
         allowed = []
         if self.chk_chrome.isChecked(): allowed.extend(["chrome.exe", "msedge.exe"])
         if self.chk_discord.isChecked(): allowed.append("discord.exe")
         if self.chk_calc.isChecked(): allowed.append("calculatorapp.exe")
-
-        if self.server_thread.send_private_config(target, allowed):
-            QMessageBox.information(self, "Éxito", f"Reglas aplicadas a {target}")
-        else:
-            QMessageBox.critical(self, "Error", "No se pudo conectar.")
+        self.server_thread.send_private_config(sel[0].text(), allowed)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
