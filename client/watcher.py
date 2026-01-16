@@ -13,7 +13,9 @@ THREAT_KEYWORDS = [
     "Chat Panel",       # VS Code nombra así al panel contenedor
     "ChatView",         # Nombre técnico interno
     "CopilotChat",
-    "Interactive Editor" # La ventanita de Ctrl+I
+    "Interactive Editor", # La ventanita de Ctrl+I
+    "Describe what to build next",
+    "Agent"
 ]
 
 class VSCodeWatcher:
