@@ -2,7 +2,7 @@
 > **Integridad Académica Sin Fronteras.**
 > La solución definitiva anti-plagio para exámenes de programación en tiempo real.
 
-[![Banner Principal](https://raw.githubusercontent.com/niclnt/SCP/screenshots/logo.png)](https://github.com/niclnt/SCP)
+[![Banner Principal](screenshots/logo.png)](https://github.com/niclnt/SCP)
 
 ---
 
@@ -25,8 +25,8 @@ El docente tiene una vista centralizada del estado de todos los alumnos. El sist
 
 | Modo Claro (Seguro) | Modo Oscuro (Alerta de Proceso) |
 | :---: | :---: |
-| ![Monitor Seguro](https://raw.githubusercontent.com/niclnt/SCP/screenshots/profesor.png) | ![Monitor Alerta](https://raw.githubusercontent.com/niclnt/SCP/screenshots/alumno.png) |
-| *Alumno conectado y monitoreado sin incidencias.* | *Alerta: El alumno abrió Microsoft Edge.* |
+| ![Monitor Seguro](screenshots/MODOCLAROPROFESOR.png) | ![Monitor Alerta](screenshots/profesor.png) |
+| *Alumno conectado y monitoreado sin incidencias.* | *Alerta: El alumno abrió un proceso prohibido.* |
 
 ---
 
@@ -34,8 +34,8 @@ El docente tiene una vista centralizada del estado de todos los alumnos. El sist
 El sistema es capaz de detectar intentos de trampa avanzados, como la instalación de extensiones de IA en tiempo real.
 
 | Detección de Extensión en Cliente | Alerta en el Servidor |
-| (https://raw.githubusercontent.com/niclnt/SCP/screenshots/seinstalaExtensionProhibida.png) | *El cliente realiza la instalación de 'Copilot Chat'.* |
-| ![Alerta Cliente IA](https://raw.githubusercontent.com/niclnt/SCP/screenshots/ALUMNOHACIENDOTRAMPA.png) | ![Alerta Servidor IA](https://raw.githubusercontent.com/niclnt/SCP/screenshots/PROFESORDETECTAUSOEXTENSION.png) |
+| :---: | :---: |
+| ![Alerta Cliente IA](screenshots/ALUMNOHACIENDOTRAMPA.png) | ![Alerta Servidor IA](screenshots/PROFESORDETECTAUSOEXTENSION.png) |
 | *El cliente detecta la instalación de 'Copilot Chat'.* | *El profesor recibe la alerta específica al instante.* |
 
 ---
@@ -45,12 +45,12 @@ El profesor puede enviar enunciados PDF y aplicar reglas de aplicaciones permiti
 
 | Envío de PDF | Recepción del Alumno |
 | :---: | :---: |
-| ![Envío PDF](https://raw.githubusercontent.com/niclnt/SCP/screenshots/ENVIOPDF.png) | ![Visor PDF](https://raw.githubusercontent.com/niclnt/SCP/screenshots/RECIBIRPDF.png) |
+| ![Envío PDF](screenshots/ENVIOPDF.png) | ![Visor PDF](screenshots/RECIBIRPDF.png) |
 | *Panel para cargar y enviar el examen.* | *El alumno recibe y visualiza el PDF integrado.* |
 
 | Aplicación de Reglas | Confirmación |
 | :---: | :---: |
-| ![Panel Reglas](https://raw.githubusercontent.com/niclnt/SCP/screenshots/OTORGARPERMISOS.png) | *Se pueden definir apps permitidas (Calculadora, etc.) y aplicarlas selectivamente.* |
+| ![Panel Reglas](screenshots/OTORGARPERMISOS.png) | *Se pueden definir apps permitidas (Calculadora, etc.) y aplicarlas selectivamente.* |
 
 ---
 
@@ -59,8 +59,8 @@ Una interfaz simple y bloqueada diseñada para que el alumno se concentre en el 
 
 | Conexión en LAN | Modo Examen Seguro |
 | :---: | :---: |
-| ![Cliente LAN](https://raw.githubusercontent.com/niclnt/ProyectosSSDL/main/screenshots/image_5.png) | ![Cliente Seguro](https://raw.githubusercontent.com/niclnt/ProyectosSSDL/main/screenshots/MODOCLAROALUMNO.png) |
-| *Detección automática de profesores en la red.* | *Interfaz bloqueada confirmando el estado seguro.* |
+| ![Cliente LAN](screenshots/MODOCLAROALUMNO.png) | ![Cliente Seguro](screenshots/RECIBIRPERMISO.png) |
+| *Detección automática de profesores en la red.* | *Interfaz confirmando reglas aplicadas y estado seguro.* |
 
 ---
 
@@ -71,7 +71,7 @@ Una interfaz simple y bloqueada diseñada para que el alumno se concentre en el 
 
 ### Pasos
 1.  Descarga la última versión desde la sección de **Releases**.
-2.  Ejecuta el instalador `SCP_Setup_Alpha2.exe`.
+2.  Ejecuta el instalador `Instalador_SCP_v2.0.exe`.
 3.  Selecciona el componente que deseas instalar (**Profesor** o **Estudiante**).
 4.  Ejecuta la aplicación desde el acceso directo en el escritorio.
 
@@ -88,4 +88,4 @@ Una interfaz simple y bloqueada diseñada para que el alumno se concentre en el 
 | **Empaquetado**| `PyInstaller` + `Inno Setup` | Compilación a .exe y creación del instalador. |
 
 ---
-© 2026 SCP - Desarrollado por Nicolas Bustos - LNT Systems.
+© 2026 SCP - Desarrollado por Nicolas Bustos - LNT Systems
