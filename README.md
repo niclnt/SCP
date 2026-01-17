@@ -2,6 +2,8 @@
 > **Integridad Académica Sin Fronteras.**
 > La solución definitiva anti-plagio para exámenes de programación en tiempo real.
 
+[![Descargar Última Versión](https://img.shields.io/github/v/release/niclnt/SCP?label=DESCARGAR%20ALPHA%202.0&style=for-the-badge&color=28a745)](https://github.com/niclnt/SCP/releases/latest)
+
 [![Banner Principal](screenshots/logo.png)](https://github.com/niclnt/SCP)
 
 ---
@@ -70,10 +72,10 @@ Una interfaz simple y bloqueada diseñada para que el alumno se concentre en el 
 * **Sistema Operativo:** Windows 10 o 11 (64 bits).
 
 ### Pasos
-1.  Descarga la última versión desde la sección de **Releases**.
-2.  Ejecuta el instalador `Instalador_SCP_v2.0.exe`.
-3.  Selecciona el componente que deseas instalar (**Profesor** o **Estudiante**).
-4.  Ejecuta la aplicación desde el acceso directo en el escritorio.
+1.  📥 **[HAZ CLIC AQUÍ PARA IR A LA DESCARGA](https://github.com/niclnt/SCP/releases/latest)**.
+2.  Baja el archivo `Instalador_SCP_v2.0.exe`.
+3.  Ejecuta el instalador y selecciona el componente que deseas (**Profesor** o **Estudiante**).
+4.  Abre la aplicación desde el acceso directo en el escritorio.
 
 ---
 
