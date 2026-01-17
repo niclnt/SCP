@@ -2,7 +2,7 @@
 > **Integridad Académica Sin Fronteras.**
 > La solución definitiva anti-plagio para exámenes de programación en tiempo real.
 
-[![Descargar Última Versión](https://img.shields.io/github/v/release/niclnt/SCP?label=DESCARGAR%20ALPHA%202.0&style=for-the-badge&color=28a745)](https://github.com/niclnt/SCP/releases/latest)
+[![Descargar Última Versión](https://img.shields.io/github/v/release/niclnt/SCP?include_prereleases&label=DESCARGAR%20ALPHA%202.0&style=for-the-badge&color=28a745)](https://github.com/niclnt/SCP/releases/latest)
 
 [![Banner Principal](screenshots/logo.png)](https://github.com/niclnt/SCP)
 
