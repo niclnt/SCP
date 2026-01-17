@@ -31,10 +31,21 @@ try:
 except:
     OCR_AVAILABLE = False
 
-# --- CONFIGURACIÓN ---
-EVIDENCE_DIR = "evidence"
-CONFIG_FILE = "server_config.json"
-if not os.path.exists(EVIDENCE_DIR): os.makedirs(EVIDENCE_DIR)
+# --- CONFIGURACIÓN DE RUTAS (FIX PARA INSTALADOR) ---
+# Obtenemos la ruta oficial de datos de aplicacion del usuario (AppData/Roaming)
+appdata_path = os.environ.get('APPDATA')
+base_storage_path = os.path.join(appdata_path, 'SCP_System_Server')
+
+# Definimos las rutas dentro de esa carpeta segura
+EVIDENCE_DIR = os.path.join(base_storage_path, "evidence")
+CONFIG_FILE = os.path.join(base_storage_path, "server_config.json")
+
+# Creamos las carpetas si no existen
+if not os.path.exists(base_storage_path):
+    os.makedirs(base_storage_path)
+    
+if not os.path.exists(EVIDENCE_DIR):
+    os.makedirs(EVIDENCE_DIR)
 
 # --- TEMAS ACTUALIZADOS ---
 THEME_DARK = """

@@ -1,50 +1,54 @@
-# 🛡️ SCP - ExamGuard
-> **Sistema de Control y Proctoring para Entornos Educativos Seguros.**
+# 🛡️ SCP: Sistema de Control de Procesos
+> **Integridad Académica Sin Fronteras.**
+> La solución definitiva anti-plagio para exámenes de programación en tiempo real.
 
-![Dashboard Monitor](docs/images/dashboard.png)
+![Banner SCP](https://via.placeholder.com/1000x300/0f172a/007bff?text=SCP+System+Alpha+2.0)
 
-## 🚀 ¿Qué es SCP?
-SCP (Student Control Platform) es una solución de software diseñada para garantizar la integridad académica en exámenes digitales. Permite a los docentes monitorear en tiempo real el estado de las computadoras de los alumnos y bloquea automáticamente herramientas de Inteligencia Artificial no autorizadas.
+## 🚀 Novedades de la Versión Alpha 2.0
+Esta versión introduce una defensa activa de "tolerancia cero" contra el fraude académico.
 
-**Versión Actual:** Alpha 1.0
-
----
-
-## ✨ Características Principales
-
-### 👨‍🏫 Para el Docente (Servidor)
-* **Monitor en Tiempo Real:** Visualiza el estado de conexión de todos los alumnos en una sola pantalla.
-* **Detección de Fraude:** Alertas instantáneas si el alumno abre navegadores (Chrome, Edge) o herramientas prohibidas.
-* **Sin Configuración:** Detecta automáticamente la IP de la red Wi-Fi para facilitar la conexión.
-
-### 👨‍🎓 Para el Alumno (Cliente)
-* **Bloqueo de IA:** Deshabilita físicamente Copilot y otras extensiones de IA en VS Code durante el examen.
-* **Cierre de Procesos:** Cierra automáticamente aplicaciones no permitidas.
-* **Conexión Inteligente:** Detecta la clase automáticamente sin necesidad de escribir IPs complejas.
+* **👁️ Visión Artificial (OCR):** El servidor analiza capturas de pantalla buscando interfaces de IA prohibidas (Copilot, ChatGPT) aunque el alumno oculte los procesos.
+* **🌍 Conexión Global (Ngrok):** Integración nativa. Conecta alumnos desde sus casas o en el aula con un solo clic, sin configurar routers.
+* **🛡️ Defensa en Profundidad:** * Bloqueo preventivo de configuración (`settings.json`).
+    * Detección de instalación de extensiones en tiempo real.
+    * Vigilancia de procesos prohibidos (Chrome, Discord, etc.).
 
 ---
 
-## 📥 Descarga e Instalación
+## 📦 Instalación y Uso
 
-No necesitas instalar Python ni librerías. Descarga el instalador oficial para Windows:
+### Para el Alumno 🎓
+1.  Descarga el **Instalador**.
+2.  Selecciona "Instalación de Estudiante".
+3.  Ejecuta `SCP Estudiante` (Solicitará permisos de Administrador para activar el sistema de seguridad).
+4.  Ingresa la IP del profesor (o la dirección remota) y haz clic en **Conectar**.
+5.  *El sistema configurará tu entorno automáticamente. ¡No intentes abrir IAs o serás reportado!*
 
-### [👉 DESCARGAR INSTALADOR (v1.0 Alpha)](https://github.com/niclnt/SCP/releases/latest)
-
-**Requisitos:**
-* Windows 10 o 11.
-* Conexión a red local (Wi-Fi o Ethernet).
-
----
-
-## 🛠️ Cómo Funciona
-
-1.  **El Profesor** inicia `SCP_Profesor` en su computadora.
-2.  **Los Alumnos** inician `SCP_Alumno` e ingresan su nombre.
-3.  El sistema detecta automáticamente la clase y establece el "Modo Examen".
-4.  Si un alumno intenta abrir una IA o un navegador, el sistema lo bloquea y avisa al profesor.
+### Para el Profesor 👨‍🏫
+1.  Descarga el **Instalador**.
+2.  Selecciona "Instalación de Profesor".
+3.  (Requisito) Instala **Tesseract OCR** en tu sistema para activar la detección de texto.
+4.  Ejecuta `SCP Profesor`.
+5.  Haz clic en **"🌐 Activar Acceso Remoto"** para obtener el enlace para tus alumnos a distancia.
 
 ---
 
-## 📄 Licencia y Créditos
-Desarrollado por **Nicolas Bustos**.
-Este software está protegido por derechos de autor.
+## 🛠️ Tecnologías
+
+Este proyecto está construido con un stack de seguridad robusto en Python:
+
+| Componente | Tecnología | Función |
+| :--- | :--- | :--- |
+| **Core** | `Python 3.10` + `PyQt6` | Lógica central e Interfaz Gráfica moderna. |
+| **Red** | `Sockets` + `pyngrok` | Comunicación TCP en tiempo real y túneles seguros. |
+| **Seguridad** | `psutil` + `ctypes` | Monitoreo de procesos y elevación de privilegios. |
+| **Visión** | `pytesseract` + `Pillow` | OCR y procesamiento de evidencia fotográfica. |
+| **UI Automation** | `uiautomation` | Inspección profunda de la interfaz de VS Code. |
+
+---
+
+## ⚠️ Nota de Responsabilidad
+Este software modifica archivos de configuración de VS Code (`settings.json`) temporalmente para garantizar un entorno de examen seguro. Se recomienda cerrar VS Code antes de iniciar el cliente.
+
+---
+© 2026 SCP Systems - Desarrollado por Nicolas Bustos - LNT.

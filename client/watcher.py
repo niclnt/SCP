@@ -9,6 +9,7 @@ import base64
 THREAT_KEYWORDS = [
     "Github Copilot", 
     "Ask Copilot",
+    "Github Copilot Chat"
     "Ask about your code",
     "Generate Agent Instrutions to onboard AI onto your codebase",
     "AI responses",
