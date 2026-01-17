@@ -1,23 +1,31 @@
-ACUERDO DE LICENCIA DE USUARIO FINAL (EULA) PARA SCP - EXAMGUARD
+ACUERDO DE LICENCIA DE USUARIO FINAL (EULA)
+SOFTWARE: SCP - SISTEMA DE CONTROL DE PROCESOS (ALPHA 2.0)
+AUTOR: NICOLAS BUSTOS - LNT SYSTEMS
+FECHA: ENERO 2026
 
-IMPORTANTE: LEA DETENIDAMENTE. AL INSTALAR ESTE SOFTWARE, USTED ACEPTA ESTOS TÉRMINOS.
+IMPORTANTE: LEA ATENTAMENTE ESTE ACUERDO ANTES DE INSTALAR O UTILIZAR EL SOFTWARE.
 
 1. CONCESIÓN DE LICENCIA
-Nicolas Bustos le concede una licencia personal, no exclusiva e intransferible para instalar y utilizar el software SCP ("El Software") únicamente con fines educativos y de monitoreo académico.
+Por el presente, se le concede una licencia limitada, no exclusiva e intransferible para instalar y utilizar el software "SCP" en sus dispositivos con fines exclusivamente académicos y educativos.
 
-2. PROPIEDAD INTELECTUAL
-El Software es propiedad intelectual de El Autor y está protegido por las leyes de derechos de autor. Usted no adquiere la propiedad del Software, solo el derecho a usarlo.
+2. USO PERMITIDO
+Este software está diseñado para garantizar la integridad académica durante evaluaciones.
+- El USUARIO ALUMNO acepta que el software monitoree los procesos en ejecución y realice capturas de pantalla de la actividad en pantalla durante la sesión de examen.
+- El USUARIO DOCENTE se compromete a utilizar la información recopilada únicamente con fines de verificación de identidad e integridad académica.
 
 3. RESTRICCIONES
-Usted NO puede:
-a) Modificar, descompilar, realizar ingeniería inversa o desensamblar el Software.
-b) Alquilar, arrendar o prestar el Software con fines de lucro.
-c) Eliminar cualquier aviso de propiedad o etiquetas del Software.
+Queda estrictamente prohibido:
+- Modificar, desensamblar, descompilar o aplicar ingeniería inversa al software.
+- Utilizar el software para fines maliciosos, espionaje no autorizado o fuera del contexto académico pactado.
+- Distribuir copias del software sin el consentimiento expreso del AUTOR.
 
-4. RENUNCIA DE GARANTÍA
-EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO. EL AUTOR NO SE HACE RESPONSABLE DE NINGÚN DAÑO DERIVADO DE SU USO.
+4. PRIVACIDAD Y DATOS
+El software recopila datos del sistema (lista de procesos) y capturas de pantalla que se almacenan localmente en el equipo del DOCENTE (Servidor). El AUTOR del software no tiene acceso a estos datos ni los almacena en servidores externos. La responsabilidad de la custodia de estos datos recae en el usuario que opera el Servidor.
 
-5. TERMINACIÓN
-Esta licencia es efectiva hasta que sea terminada. Sus derechos bajo esta licencia terminarán automáticamente sin previo aviso si usted incumple cualquiera de sus términos.
+5. RENUNCIA DE GARANTÍA
+Este software se proporciona "TAL CUAL", sin garantía de ningún tipo, expresa o implícita. El AUTOR no se hace responsable de daños directos, indirectos, incidentales o consecuentes derivados del uso o la imposibilidad de uso de este software.
 
-Copyright (c) 2026 Nicolas Bustos. Todos los derechos reservados.
+6. TERMINACIÓN
+Esta licencia es efectiva hasta su terminación. Sus derechos bajo esta licencia terminarán automáticamente sin previo aviso si incumple cualquiera de los términos.
+
+AL HACER CLIC EN "ACEPTO", USTED RECONOCE QUE HA LEÍDO ESTE ACUERDO, LO ENTIENDE Y ACEPTA ESTAR OBLIGADO POR SUS TÉRMINOS.

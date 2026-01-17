@@ -221,6 +221,8 @@ class NetworkThread(QThread):
                 except: pass
         except: pass
 
+
+#parte estetica
 class StudentClient(QWidget):
     def __init__(self):
         super().__init__()
