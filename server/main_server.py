@@ -26,9 +26,29 @@ try:
     import pytesseract
     from PIL import Image
     import io
-    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-    OCR_AVAILABLE = True
-except:
+    
+    # LÓGICA DE DETECCIÓN INTELIGENTE DE TESSERACT
+    # 1. Buscamos una carpeta "Tesseract-OCR" junto al ejecutable (Modo Portátil)
+    base_path = os.path.dirname(os.path.abspath(sys.argv[0]))
+    portable_tesseract = os.path.join(base_path, "Tesseract-OCR", "tesseract.exe")
+    
+    # 2. Ruta de instalación típica (Respaldo)
+    installed_tesseract = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+    if os.path.exists(portable_tesseract):
+        pytesseract.pytesseract.tesseract_cmd = portable_tesseract
+        OCR_AVAILABLE = True
+        print(f"✅ Tesseract portátil detectado en: {portable_tesseract}")
+    elif os.path.exists(installed_tesseract):
+        pytesseract.pytesseract.tesseract_cmd = installed_tesseract
+        OCR_AVAILABLE = True
+        print("✅ Tesseract instalado detectado.")
+    else:
+        OCR_AVAILABLE = False
+        print("⚠️ Tesseract NO encontrado. El servidor no podrá leer texto de las fotos.")
+
+except Exception as e:
+    print(f"Error cargando módulo OCR: {e}")
     OCR_AVAILABLE = False
 
 # --- CONFIGURACIÓN ---

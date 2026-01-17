@@ -18,7 +18,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 
 ; --- DERECHOS Y LICENCIA (NUEVO) ---
-AppCopyright=© 2026 SCP Systems. Desarrollado por Nicolás.
+AppCopyright=© 2026 SCP Systems. Desarrollado por Nicolas Bustos.
 LicenseFile=LICENSE.txt
 
 ; --- CONFIGURACIÓN TÉCNICA ---
@@ -51,6 +51,7 @@ Name: "server"; Description: "SCP Servidor (Profesor)"; Types: teacher full
 ; NOTA: Asegurate de que los .exe esten en la carpeta 'dist'
 Source: "dist\SCP_Estudiante_Alpha2.exe"; DestDir: "{app}"; Components: client; Flags: ignoreversion
 Source: "dist\SCP_Profesor_Alpha2.exe"; DestDir: "{app}"; Components: server; Flags: ignoreversion
+Source: "dist\Tesseract-OCR\*"; DestDir: "{app}\Tesseract-OCR"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: server
 ; Incluimos la licencia también en la carpeta de instalación para referencia futura
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
