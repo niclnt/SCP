@@ -191,15 +191,23 @@ class ServerThread(threading.Thread):
                 threading.Thread(target=self.handle_client, args=(client_sock, addr)).start()
             except: break
 
-    def broadcast_config(self, allowed_list): self._broadcast(json.dumps({"type": "CONFIG", "allowed_apps": allowed_list}))
+    def broadcast_config(self, allowed_list):
+        msg = json.dumps({"type": "CONFIG", "allowed_apps": allowed_list})
+        #Lanzamos un hilo fantasma para que lo haga en el fondo
+        threading.Thread(target=self._broadcast, args=(msg,)).start()
     
     def broadcast_pdf(self, filepath):
         try:
             filename = os.path.basename(filepath)
             if os.path.getsize(filepath) > 10 * 1024 * 1024: return False, "Archivo muy grande (>10MB)"
-            with open(filepath, "rb") as f: b64 = base64.b64encode(f.read()).decode('utf-8')
-            self._broadcast(json.dumps({"type": "EXAM_FILE", "filename": filename, "file_data": b64}))
-            return True, "Enviado"
+            with open(filepath, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode('utf-8')
+            msg = json.dumps({"type": "EXAM_FILE", "filename": filename, "file_data": b64})
+            
+            # También aquí usamos un hilo aparte para no congelar mientras envía el PDF
+            threading.Thread(target=self._broadcast, args=(msg,)).start()
+            
+            return True, "Enviando en segundo plano..."
         except Exception as e: return False, str(e)
 
     def _broadcast(self, json_msg):
