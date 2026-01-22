@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCP Monitor | by Elentech Systems</title>
+    <meta name="description" content="La solución definitiva de integridad académica y productividad remota.">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Outfit', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            dark: '#0B0F19',
+                            card: '#151B2B',
+                            accent: '#3B82F6', // Azul Elentech
+                            success: '#10B981', // Verde SCP
+                            danger: '#EF4444'
+                        }
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0B0F19; color: white; overflow-x: hidden; }
+        .glass-nav { background: rgba(11, 15, 25, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .gradient-text { background: linear-gradient(135deg, #60A5FA 0%, #34D399 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero-glow { position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(0,0,0,0) 70%); top: -100px; left: 50%; transform: translateX(-50%); z-index: -1; pointer-events: none; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <nav class="glass-nav fixed w-full z-50 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
+            <div class="flex items-center gap-2 cursor-pointer" onclick="window.scrollTo(0,0)">
+                <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-400 rounded-lg flex items-center justify-center text-black font-bold text-lg">E</div>
+                <span class="text-xl font-bold tracking-wide">ELENTECH <span class="text-gray-500 font-normal">SYSTEMS</span></span>
+            </div>
+
+            <div class="hidden md:flex gap-8 text-sm font-medium text-gray-300">
+                <a href="#academic" class="hover:text-white transition">Academic Edition</a>
+                <a href="#enterprise" class="hover:text-blue-400 transition">Enterprise</a>
+                <a href="#download" class="hover:text-green-400 transition">Descargas</a>
+            </div>
+
+            <a href="https://github.com/niclnt/SCP" target="_blank" class="hidden md:flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 px-4 py-2 rounded-full text-xs font-bold transition">
+                <i class="ph ph-github-logo text-lg"></i> GitHub Repo
+            </a>
+        </div>
+    </nav>
+
+    <header class="relative pt-32 pb-20 px-6 text-center overflow-hidden">
+        <div class="hero-glow"></div>
+        
+        <div class="max-w-5xl mx-auto" data-aos="fade-up">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-900/30 border border-blue-500/30 text-blue-400 text-xs font-bold mb-6 tracking-widest uppercase">
+                🚀 Alpha 2.0 Lanzada
+            </div>
+            <h1 class="text-5xl md:text-7xl font-extrabold leading-tight mb-6">
+                El Estándar de <br>
+                <span class="gradient-text">Integridad Digital</span>
+            </h1>
+            <p class="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-10">
+                SCP Monitor protege exámenes académicos y optimiza flujos de trabajo remotos mediante visión artificial y defensa activa.
+            </p>
+            
+            <div class="flex flex-col md:flex-row justify-center gap-4">
+                <a href="#download" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-900/50 transition transform hover:-translate-y-1">
+                    Descargar Academic
+                </a>
+                <a href="#enterprise" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-8 py-4 rounded-xl font-bold text-lg border border-gray-700 transition">
+                    Ver Solución Enterprise
+                </a>
+            </div>
+        </div>
+
+        <div class="mt-20 max-w-6xl mx-auto relative group" data-aos="fade-up" data-aos-delay="200">
+            <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-green-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+            <div class="relative bg-brand-dark rounded-xl border border-gray-800 shadow-2xl overflow-hidden aspect-video flex items-center justify-center">
+                <img src="https://raw.githubusercontent.com/niclnt/SCP/main/screenshots/profesor.png" class="w-full h-full object-cover opacity-90 hover:opacity-100 transition duration-500" alt="Dashboard SCP">
+                
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-xl group-hover:scale-110 transition duration-300">
+                        <i class="ph-fill ph-play text-3xl text-white"></i>
+                    </div>
+                </div>
+            </div>
+            <p class="mt-4 text-sm text-gray-500">Interfaz de Monitoreo en Tiempo Real - Alpha 2.0</p>
+        </div>
+    </header>
+
+    <section id="academic" class="py-24 bg-brand-card/30 border-y border-gray-800">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16" data-aos="fade-up">
+                <h2 class="text-3xl font-bold mb-4">SCP Monitor: <span class="text-green-400">Academic Edition</span></h2>
+                <p class="text-gray-400">Diseñado para universidades y centros educativos.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-brand-card p-8 rounded-2xl border border-gray-800 hover:border-green-500/50 transition group" data-aos="fade-up" data-aos-delay="0">
+                    <div class="w-12 h-12 bg-green-900/30 rounded-lg flex items-center justify-center text-green-400 mb-6 text-2xl group-hover:scale-110 transition">
+                        <i class="ph ph-eye"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Anti-IA (OCR)</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        Nuestro servidor analiza capturas de pantalla en tiempo real. Si detecta "Copilot", "ChatGPT" o cualquier asistente, genera una alerta inmediata al profesor.
+                    </p>
+                </div>
+
+                <div class="bg-brand-card p-8 rounded-2xl border border-gray-800 hover:border-blue-500/50 transition group" data-aos="fade-up" data-aos-delay="100">
+                    <div class="w-12 h-12 bg-blue-900/30 rounded-lg flex items-center justify-center text-blue-400 mb-6 text-2xl group-hover:scale-110 transition">
+                        <i class="ph ph-globe"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Conexión Global</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        Olvídate de configurar routers. Gracias a la integración nativa con <strong>Ngrok</strong>, puedes examinar alumnos en el aula o en sus casas con un solo clic.
+                    </p>
+                </div>
+
+                <div class="bg-brand-card p-8 rounded-2xl border border-gray-800 hover:border-red-500/50 transition group" data-aos="fade-up" data-aos-delay="200">
+                    <div class="w-12 h-12 bg-red-900/30 rounded-lg flex items-center justify-center text-red-400 mb-6 text-2xl group-hover:scale-110 transition">
+                        <i class="ph ph-shield-warning"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Defensa Activa</h3>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        Bloqueo preventivo de `settings.json` en VS Code y detección de instalación de extensiones en caliente. Tolerancia cero al fraude.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="enterprise" class="py-24 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-blue-900/10 to-transparent pointer-events-none"></div>
+
+        <div class="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
+            <div data-aos="fade-right">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-400 text-xs font-bold mb-6">
+                    PRÓXIMAMENTE
+                </div>
+                <h2 class="text-4xl font-bold mb-6">Elentech <span class="text-purple-400">Enterprise</span></h2>
+                <p class="text-gray-300 text-lg mb-6">
+                    Llevamos la tecnología de monitoreo al mundo corporativo. Maximiza el rendimiento de equipos remotos sin invadir la privacidad personal.
+                </p>
+                <ul class="space-y-4 mb-8">
+                    <li class="flex items-center gap-3 text-gray-400">
+                        <i class="ph-fill ph-check-circle text-purple-500"></i> Métricas de Foco y Productividad.
+                    </li>
+                    <li class="flex items-center gap-3 text-gray-400">
+                        <i class="ph-fill ph-check-circle text-purple-500"></i> Prevención de Fuga de Datos (DLP).
+                    </li>
+                    <li class="flex items-center gap-3 text-gray-400">
+                        <i class="ph-fill ph-check-circle text-purple-500"></i> Reportes automáticos para RRHH.
+                    </li>
+                </ul>
+                <button class="px-6 py-3 border border-gray-600 rounded-lg text-sm hover:bg-gray-800 transition">
+                    Unirse a la Lista de Espera
+                </button>
+            </div>
+            
+            <div class="relative" data-aos="fade-left">
+                <div class="bg-gray-900 rounded-xl border border-gray-700 p-6 shadow-2xl relative z-10">
+                    <div class="flex items-center gap-4 mb-6 border-b border-gray-800 pb-4">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <div class="ml-auto text-xs text-gray-500">Enterprise Dashboard v1.0</div>
+                    </div>
+                    <div class="space-y-4 animate-pulse">
+                        <div class="h-8 bg-gray-800 rounded w-1/3"></div>
+                        <div class="h-32 bg-gray-800 rounded w-full"></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="h-24 bg-gray-800 rounded"></div>
+                            <div class="h-24 bg-gray-800 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="absolute -inset-4 bg-purple-600/20 blur-2xl z-0 rounded-full"></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="download" class="py-24 text-center">
+        <div class="max-w-4xl mx-auto px-6">
+            <h2 class="text-3xl font-bold mb-12">Comienza ahora con <span class="text-blue-500">SCP Monitor</span></h2>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-brand-card p-8 rounded-2xl border border-gray-700 hover:border-blue-500 transition relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 bg-blue-600 text-xs font-bold px-3 py-1 rounded-bl-lg">SERVER</div>
+                    <h3 class="text-2xl font-bold text-white mb-2">Para Docentes</h3>
+                    <p class="text-gray-400 text-sm mb-6">Dashboard completo de control y alertas.</p>
+                    <a href="https://github.com/niclnt/SCP/releases/latest" class="block w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition">
+                        Descargar (.exe)
+                    </a>
+                </div>
+
+                <div class="bg-brand-card p-8 rounded-2xl border border-gray-700 hover:border-green-500 transition relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 bg-green-600 text-xs font-bold px-3 py-1 rounded-bl-lg">CLIENT</div>
+                    <h3 class="text-2xl font-bold text-white mb-2">Para Estudiantes</h3>
+                    <p class="text-gray-400 text-sm mb-6">Cliente ligero con bloqueo de seguridad.</p>
+                    <a href="https://github.com/niclnt/SCP/releases/latest" class="block w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition">
+                        Descargar (.exe)
+                    </a>
+                </div>
+            </div>
+            <p class="mt-8 text-xs text-gray-500">
+                Requisitos: Windows 10/11 • Conexión a Internet (Remoto) • <a href="#" class="underline hover:text-white">Licencia de Uso</a>
+            </p>
+        </div>
+    </section>
+
+    <footer class="py-8 border-t border-gray-800 text-center text-sm text-gray-500">
+        <p class="mb-2">© 2026 Elentech Systems. Todos los derechos reservados.</p>
+        <div class="flex justify-center gap-4">
+            <a href="#" class="hover:text-white transition">Privacidad</a>
+            <a href="#" class="hover:text-white transition">Términos</a>
+            <a href="https://github.com/niclnt/SCP" class="hover:text-white transition">GitHub</a>
+        </div>
+    </footer>
+
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        AOS.init({
+            duration: 800,
+            once: true,
+            offset: 100
+        });
+    </script>
+</body>
+</html>
