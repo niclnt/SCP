@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ================================================
-echo 🛠️  MODO DE COMPILACION SEGURO (DIAGNOSTICO)
+echo 🛠️  MODO DE COMPILACION SEGURO (V2.0.1)
 echo ================================================
 echo.
 
@@ -13,49 +13,44 @@ if exist *.spec del *.spec
 REM 2. Activar entorno
 call venv\Scripts\activate
 
-REM 3. Instalar solo lo basico (Sin encriptacion por ahora)
-echo [1/3] Verificando librerias base...
+REM 3. Instalar dependencias
+echo [1/4] Verificando librerias...
 pip install pyinstaller pyngrok pytesseract pillow uiautomation pyautogui PyQt6 --quiet
 
 REM 4. Deteccion de Icono
 set "ICON_PARAM="
 if exist scp.ico (
-    echo 🎨 Icono 'scp.ico' encontrado. Se usara.
+    echo 🎨 Icono 'scp.ico' encontrado.
     set "ICON_PARAM=--icon=scp.ico"
-) else (
-    echo ⚠️ NO se encontro 'scp.ico'. Se usara el icono estandar.
 )
 
 REM 5. COMPILAR CLIENTE
 echo.
-echo [2/3] Compilando Cliente...
-echo ---------------------------------------
+echo [2/4] Compilando Cliente...
 pyinstaller --noconfirm --onefile --windowed --clean --name "SCP_Estudiante_Alpha2" %ICON_PARAM% --hidden-import=uiautomation --hidden-import=pyautogui --hidden-import=PyQt6 --uac-admin client/main_client.py
 
-if errorlevel 1 (
-    echo.
-    echo ❌ ERROR CRITICO AL COMPILAR EL CLIENTE.
-    echo Revisa el mensaje de error arriba en rojo.
-    pause
-    exit /b
-)
+if errorlevel 1 exit /b
 
 REM 6. COMPILAR SERVIDOR
 echo.
-echo [3/3] Compilando Servidor...
-echo ---------------------------------------
+echo [3/4] Compilando Servidor...
 pyinstaller --noconfirm --onefile --windowed --clean --name "SCP_Profesor_Alpha2" %ICON_PARAM% --hidden-import=pyngrok --hidden-import=pytesseract --hidden-import=PIL --hidden-import=PyQt6 server/main_server.py
 
-if errorlevel 1 (
-    echo.
-    echo ❌ ERROR CRITICO AL COMPILAR EL SERVIDOR.
-    pause
-    exit /b
+if errorlevel 1 exit /b
+
+REM --- [PASO EXTRA] COPIAR TESSERACT AUTOMATICAMENTE ---
+echo.
+echo [EXTRA] Integrando Motor OCR Tesseract...
+if exist "Tesseract-OCR" (
+    xcopy "Tesseract-OCR" "dist\Tesseract-OCR\" /E /I /Y /Q
+    echo ✅ Tesseract copiado a la carpeta de distribucion.
+) else (
+    echo ⚠️ ADVERTENCIA: No se encontro la carpeta 'Tesseract-OCR' en la raiz del proyecto.
+    echo El servidor no tendra OCR portatil.
 )
 
 echo.
 echo ================================================
-echo ✅ EXITO: CARPETA 'dist' CREADA
+echo ✅ EXITO: VERSION 2.0.1 LISTA
 echo ================================================
-echo Buscala en: %CD%\dist
 pause

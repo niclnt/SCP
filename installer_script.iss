@@ -1,11 +1,11 @@
-; Script de Instalación para SCP Alpha 2.0
+; Script de Instalación para SCP Alpha 2.0.1
 ; Requiere Inno Setup Compiler
 
-#define MyAppName "SCP - Sistema de Control de Procesos"
-#define MyAppVersion "Alpha 2.0"
-#define MyAppPublisher "Nicolas Bustos"
+#define MyAppName "SCP Monitor - Sistema de Control de Procesos"
+#define MyAppVersion "Alpha 2.0.1"
+#define MyAppPublisher "Elentech Systems"
 #define MyAppURL "https://github.com/niclnt/SCP"
-#define MyAppExeName "SCP_Launcher.exe"
+#define MyAppExeName "SCP-Monitor_Launcher.exe"
 
 [Setup]
 ; --- IDENTIDAD ---
@@ -18,7 +18,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 
 ; --- DERECHOS Y LICENCIA (NUEVO) ---
-AppCopyright=© 2026 SCP Systems. Desarrollado por Nicolas Bustos.
+AppCopyright=© 2026 SCP Systems. Desarrollado por Elentech Systems.
 LicenseFile=LICENSE.txt
 
 ; --- CONFIGURACIÓN TÉCNICA ---
@@ -27,7 +27,7 @@ DisableProgramGroupPage=yes
 ; Asegúrate de tener el icono o comenta esta línea con punto y coma
 SetupIconFile=scp.ico 
 OutputDir=installer_dist
-OutputBaseFilename=Instalador_SCP_v2.0
+OutputBaseFilename=Instalador_SCP_Monitor_v2.0.1
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

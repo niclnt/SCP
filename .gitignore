@@ -11,6 +11,7 @@ env/
 # --- PyInstaller (Basura de compilación) ---
 build/
 dist/
+Tesseract-OCR/
 *.spec
 
 # --- Carpetas de Salida (Tus EXE finales) ---
