@@ -1,4 +1,4 @@
-# 🛡️ SCP: Sistema de Control de Procesos (Alpha 2.0)
+# 🛡️ SCP: Sistema de Control de Procesos (Alpha 2.0.1)
 > **Integridad Académica Sin Fronteras.**
 > La solución definitiva anti-plagio para exámenes de programación en tiempo real.
 
@@ -8,7 +8,7 @@
 
 ---
 
-## 🚀 Novedades de la Versión Alpha 2.0
+## 🚀 Novedades de la Versión Alpha 2.0.1
 Esta versión introduce una defensa activa de "tolerancia cero" contra el fraude académico en entornos de programación.
 
 * **👁️ Visión Artificial (OCR):** Análisis de capturas de pantalla en el servidor para detectar interfaces de IA (Copilot, ChatGPT) incluso si el alumno las oculta.
@@ -73,7 +73,7 @@ Una interfaz simple y bloqueada diseñada para que el alumno se concentre en el 
 
 ### Pasos
 1.  📥 **[HAZ CLIC AQUÍ PARA IR A LA DESCARGA](https://github.com/niclnt/SCP/releases/latest)**.
-2.  Baja el archivo `Instalador_SCP_v2.0.exe`.
+2.  Baja el archivo `Instalador_SCP_Monitor_v2.0.1.exe`.
 3.  Ejecuta el instalador y selecciona el componente que deseas (**Profesor** o **Estudiante**).
 4.  Abre la aplicación desde el acceso directo en el escritorio.
 
